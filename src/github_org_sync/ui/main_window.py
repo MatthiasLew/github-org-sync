@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -478,10 +479,12 @@ class MainWindow(QMainWindow):
         if self.last_md_report and self.last_md_report.exists():
             try:
                 # Open markdown file in default system editor
-                if os.name == "nt":
-                    os.startfile(self.last_md_report)
+                if hasattr(os, "startfile"):
+                    getattr(os, "startfile")(self.last_md_report)  # noqa: B009
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(self.last_md_report)], check=True)
                 else:
-                    subprocess.run(["xdg-open", str(self.last_md_report)])
+                    subprocess.run(["xdg-open", str(self.last_md_report)], check=True)
             except Exception as e:
                 QMessageBox.warning(self, "Open Report Failed", f"Could not open report file:\n{e}")
 
@@ -489,10 +492,12 @@ class MainWindow(QMainWindow):
         ws_text = self.workspace_input.text().strip()
         if ws_text and Path(ws_text).exists():
             try:
-                if os.name == "nt":
-                    os.startfile(ws_text)
+                if hasattr(os, "startfile"):
+                    getattr(os, "startfile")(ws_text)  # noqa: B009
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", ws_text], check=True)
                 else:
-                    subprocess.run(["xdg-open", ws_text])
+                    subprocess.run(["xdg-open", ws_text], check=True)
             except Exception as e:
                 QMessageBox.warning(self, "Open Workspace Failed", f"Could not open workspace:\n{e}")
         else:
