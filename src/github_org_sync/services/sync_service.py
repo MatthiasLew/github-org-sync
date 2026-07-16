@@ -1,8 +1,11 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, List
+from typing import Any
+
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
 from github_org_sync.services.git_service import GitService
+
 
 class SyncService:
     def __init__(self, git_service: GitService | None = None) -> None:
@@ -10,10 +13,10 @@ class SyncService:
 
     def filter_repositories(
         self,
-        repositories: List[Repository],
+        repositories: list[Repository],
         include_archived: bool,
         include_forks: bool,
-    ) -> List[Repository]:
+    ) -> list[Repository]:
         """
         Filters a list of repositories based on archive and fork options.
         """
@@ -28,11 +31,11 @@ class SyncService:
 
     def check_local_statuses(
         self,
-        repositories: List[Repository],
+        repositories: list[Repository],
         workspace: Path,
         org_name: str,
         progress_callback: Callable[[int, int, str], None] | None = None,
-    ) -> List[Repository]:
+    ) -> list[Repository]:
         """
         Inspects the local directory for each repository and updates their status/branch/ahead/behind.
         """
@@ -40,29 +43,29 @@ class SyncService:
         for idx, repo in enumerate(repositories):
             repo_path = workspace / repo.name
             repo.local_path = repo_path
-            
+
             if progress_callback:
                 progress_callback(idx + 1, total, repo.name)
-                
+
             status, branch, ahead, behind, msg = self.git_service.get_local_status(repo_path, org_name)
-            
+
             repo.status = status
             repo.branch = branch
             repo.ahead = ahead
             repo.behind = behind
             repo.result = msg
-            
+
         return repositories
 
     def sync_repositories(
         self,
-        repositories: List[Repository],
+        repositories: list[Repository],
         workspace: Path,
         org_name: str,
         options: dict[str, Any],
         progress_callback: Callable[[int, int, Repository, SyncResult], None] | None = None,
         is_cancelled_callback: Callable[[], bool] | None = None,
-    ) -> List[SyncResult]:
+    ) -> list[SyncResult]:
         """
         Synchronizes (clones or updates) a list of selected repositories.
         """
@@ -72,7 +75,7 @@ class SyncService:
         dry_run = options.get("dry_run", False)
         checkout_default = options.get("checkout_default", False)
 
-        results: List[SyncResult] = []
+        results: list[SyncResult] = []
         total = len(repositories)
 
         for idx, repo in enumerate(repositories):
@@ -86,7 +89,7 @@ class SyncService:
                         after_status=remaining_repo.status,
                         duration=0.0,
                         operation="sync",
-                        message="Sync cancelled by user."
+                        message="Sync cancelled by user.",
                     )
                     results.append(res)
                     if progress_callback:
@@ -109,7 +112,7 @@ class SyncService:
                     after_status=before_status,
                     duration=0.0,
                     operation="skip",
-                    message=f"Skipped due to status: {before_status}"
+                    message=f"Skipped due to status: {before_status}",
                 )
             else:
                 # Sync / Update
@@ -119,7 +122,7 @@ class SyncService:
                     preserve_local_changes=preserve_local_changes,
                     fetch_only=fetch_only,
                     checkout_default=checkout_default,
-                    dry_run=dry_run
+                    dry_run=dry_run,
                 )
 
             # Update repository state in-place based on sync results

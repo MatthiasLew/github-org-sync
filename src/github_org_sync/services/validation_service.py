@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+
 class ValidationService:
     @staticmethod
     def normalize_org_name(org_input: str) -> str:
@@ -14,23 +15,23 @@ class ValidationService:
         """
         if not org_input:
             raise ValueError("Organization name or URL cannot be empty")
-            
+
         cleaned = org_input.strip()
-        
+
         # Match git@github.com:orgname or git@github.com:orgname/
         ssh_match = re.match(r"^git@github\.com:([^/]+)(?:/)?$", cleaned)
         if ssh_match:
             return ssh_match.group(1)
-            
+
         # Match http(s)://(www.)github.com/orgname or http(s)://(www.)github.com/orgname/
         http_match = re.match(r"^https?://(?:www\.)?github\.com/([^/]+)(?:/)?$", cleaned)
         if http_match:
             return http_match.group(1)
-            
+
         # Simple name check: should not contain slashes, spaces, or colons
         if "/" in cleaned or "\\" in cleaned or ":" in cleaned or " " in cleaned:
             raise ValueError(f"Invalid organization name or URL format: {org_input}")
-            
+
         return cleaned
 
     @staticmethod
@@ -40,9 +41,9 @@ class ValidationService:
         """
         if not path_str:
             raise ValueError("Workspace path cannot be empty")
-            
+
         path = Path(path_str).resolve()
-        
+
         # Check if parent directory exists (or if it exists)
         if not path.exists():
             try:
@@ -52,5 +53,5 @@ class ValidationService:
                     raise ValueError(f"Parent directory does not exist: {parent}")
             except Exception as e:
                 raise ValueError(f"Invalid workspace path: {e}") from e
-                
+
         return path

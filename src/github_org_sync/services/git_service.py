@@ -3,9 +3,10 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
+
 
 class GitService:
     def __init__(self) -> None:
@@ -43,33 +44,33 @@ class GitService:
         """
         if not path.exists():
             return "MISSING", None, None, None, None
-            
+
         if not self.is_git_repository(path):
             return "NOT_A_REPOSITORY", None, None, None, "Folder exists but is not a git repository"
-            
+
         try:
             # 1. Remote Origin URL
             cp_url = self._run_git(path, ["remote", "get-url", "origin"])
             if cp_url.returncode != 0:
                 return "NO_UPSTREAM", None, None, None, "Missing origin remote"
             remote_url = cp_url.stdout.strip()
-            
+
             if self.is_wrong_remote(remote_url, org_name):
                 return "WRONG_REMOTE", None, None, None, f"Remote origin is wrong: {remote_url}"
-                
+
             # 2. Current branch
             cp_branch = self._run_git(path, ["rev-parse", "--abbrev-ref", "HEAD"])
             branch = cp_branch.stdout.strip() if cp_branch.returncode == 0 else None
             if branch == "HEAD":
                 return "DETACHED_HEAD", "HEAD", None, None, "Detached HEAD"
-                
+
             # 3. Upstream branch
             if branch:
                 cp_up = self._run_git(path, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
                 if cp_up.returncode != 0:
                     return "NO_UPSTREAM", branch, None, None, "No tracking upstream branch"
                 upstream = cp_up.stdout.strip()
-                
+
                 # 4. Ahead / Behind
                 cp_ab = self._run_git(path, ["rev-list", "--left-right", "--count", f"HEAD...{upstream}"])
                 if cp_ab.returncode == 0:
@@ -80,14 +81,14 @@ class GitService:
                     ahead, behind = 0, 0
             else:
                 ahead, behind = None, None
-                
+
             # 5. Dirty check
             cp_status = self._run_git(path, ["status", "--porcelain"])
             is_dirty = bool(cp_status.stdout.strip())
-            
+
             if is_dirty:
                 return "DIRTY", branch, ahead, behind, "Local changes present"
-                
+
             if ahead is not None and behind is not None:
                 if ahead > 0 and behind > 0:
                     return "DIVERGED", branch, ahead, behind, "Local and remote have diverged"
@@ -95,9 +96,9 @@ class GitService:
                     return "AHEAD", branch, ahead, behind, "Local commits not pushed"
                 if behind > 0:
                     return "BEHIND", branch, ahead, behind, "Remote commits can be pulled"
-                    
+
             return "UP_TO_DATE", branch, ahead, behind, None
-            
+
         except Exception as e:
             return "FAILED", None, None, None, str(e)
 
@@ -105,7 +106,7 @@ class GitService:
         """Clones a remote repository."""
         start_time = time.time()
         url = repo.ssh_url if use_ssh else repo.url
-        
+
         if dry_run:
             return SyncResult(
                 repo_name=repo.name,
@@ -114,16 +115,16 @@ class GitService:
                 after_status="MISSING",
                 duration=0.0,
                 operation="clone",
-                message=f"[DRY-RUN] Would clone {url} to {dest_path}"
+                message=f"[DRY-RUN] Would clone {url} to {dest_path}",
             )
-            
+
         try:
             # Create destination's parent directories if needed
             dest_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             cp = self._run_git(None, ["clone", url, str(dest_path)])
             duration = time.time() - start_time
-            
+
             if cp.returncode != 0:
                 err_msg = (cp.stderr or cp.stdout).strip()
                 return SyncResult(
@@ -134,9 +135,9 @@ class GitService:
                     duration=duration,
                     operation="clone",
                     error=err_msg,
-                    message=f"Clone failed: {err_msg}"
+                    message=f"Clone failed: {err_msg}",
                 )
-                
+
             return SyncResult(
                 repo_name=repo.name,
                 status="CLONED",
@@ -144,7 +145,7 @@ class GitService:
                 after_status="UP_TO_DATE",
                 duration=duration,
                 operation="clone",
-                message="Successfully cloned repository"
+                message="Successfully cloned repository",
             )
         except Exception as e:
             return SyncResult(
@@ -155,7 +156,7 @@ class GitService:
                 duration=time.time() - start_time,
                 operation="clone",
                 error=str(e),
-                message=f"Exception during clone: {e}"
+                message=f"Exception during clone: {e}",
             )
 
     def get_default_branch(self, path: Path) -> str | None:
@@ -165,7 +166,7 @@ class GitService:
         cp = self._run_git(path, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
         if cp.returncode == 0 and "/" in cp.stdout:
             return cp.stdout.strip().split("/", 1)[1]
-            
+
         # Fallback to local branch checking
         for candidate in ("main", "master"):
             cp = self._run_git(path, ["rev-parse", "--verify", f"origin/{candidate}"])
@@ -196,7 +197,7 @@ class GitService:
                 duration=0.0,
                 operation="sync",
                 error="Local path does not exist",
-                message="Local path does not exist"
+                message="Local path does not exist",
             )
 
         # 1. Assess initial status
@@ -210,7 +211,7 @@ class GitService:
                 duration=0.0,
                 operation="sync",
                 error=init_msg,
-                message=init_msg
+                message=init_msg,
             )
 
         if dry_run:
@@ -222,7 +223,7 @@ class GitService:
                 after_status=status,
                 duration=duration,
                 operation="sync",
-                message=f"[DRY-RUN] Would fetch and update (fetch_only={fetch_only})"
+                message=f"[DRY-RUN] Would fetch and update (fetch_only={fetch_only})",
             )
 
         # 2. Fetch changes
@@ -238,7 +239,7 @@ class GitService:
                 duration=duration,
                 operation="sync",
                 error=err_msg,
-                message=f"Fetch failed: {err_msg}"
+                message=f"Fetch failed: {err_msg}",
             )
 
         if fetch_only:
@@ -252,7 +253,7 @@ class GitService:
                 after_status=post_status,
                 duration=duration,
                 operation="sync",
-                message=f"Fetched remote changes. Post status: {post_status}."
+                message=f"Fetched remote changes. Post status: {post_status}.",
             )
 
         # 3. Handle checkout default branch if required
@@ -272,7 +273,7 @@ class GitService:
                         duration=duration,
                         operation="sync",
                         error="Local changes present. Checkout default branch blocked.",
-                        message="Checkout default branch blocked: repository is dirty."
+                        message="Checkout default branch blocked: repository is dirty.",
                     )
                 cp_co = self._run_git(path, ["checkout", default_b])
                 if cp_co.returncode != 0:
@@ -286,7 +287,7 @@ class GitService:
                         duration=duration,
                         operation="sync",
                         error=err_msg,
-                        message=f"Checkout {default_b} failed: {err_msg}"
+                        message=f"Checkout {default_b} failed: {err_msg}",
                     )
                 current_b = default_b
 
@@ -301,7 +302,7 @@ class GitService:
                 after_status=status_mid,
                 duration=duration,
                 operation="sync",
-                message=f"Skipping pull: repository is {status_mid}."
+                message=f"Skipping pull: repository is {status_mid}.",
             )
 
         if status_mid == "UP_TO_DATE":
@@ -313,7 +314,7 @@ class GitService:
                 after_status="UP_TO_DATE",
                 duration=duration,
                 operation="sync",
-                message="Repository is already up to date."
+                message="Repository is already up to date.",
             )
 
         # 5. Stashing if dirty
@@ -329,9 +330,9 @@ class GitService:
                     duration=duration,
                     operation="sync",
                     error="Local changes exist and preserve changes is disabled",
-                    message="Sync skipped: repository is dirty and auto-stash is disabled."
+                    message="Sync skipped: repository is dirty and auto-stash is disabled.",
                 )
-                
+
             # Perform git stash push
             cp_stash = self._run_git(path, ["stash", "push", "--include-untracked", "-m", "github-org-sync autostash"])
             if cp_stash.returncode != 0:
@@ -345,14 +346,14 @@ class GitService:
                     duration=duration,
                     operation="sync",
                     error=err_msg,
-                    message=f"Autostash failed: {err_msg}"
+                    message=f"Autostash failed: {err_msg}",
                 )
             # Only count as stashed if changes were actually pushed
             stashed = "No local changes" not in cp_stash.stdout
 
         # 6. Pull --ff-only
         cp_pull = self._run_git(path, ["pull", "--ff-only"])
-        pull_failed = (cp_pull.returncode != 0)
+        pull_failed = cp_pull.returncode != 0
         pull_err = (cp_pull.stderr or cp_pull.stdout).strip() if pull_failed else None
 
         # 7. Pop stash if we stashed
@@ -365,7 +366,7 @@ class GitService:
                 pop_err = (cp_pop.stderr or cp_pop.stdout).strip()
 
         duration = time.time() - start_time
-        
+
         if pull_failed:
             return SyncResult(
                 repo_name=repo.name,
@@ -375,9 +376,9 @@ class GitService:
                 duration=duration,
                 operation="sync",
                 error=pull_err,
-                message=f"Pull fast-forward failed: {pull_err}"
+                message=f"Pull fast-forward failed: {pull_err}",
             )
-            
+
         if pop_conflict:
             return SyncResult(
                 repo_name=repo.name,
@@ -387,7 +388,7 @@ class GitService:
                 duration=duration,
                 operation="sync",
                 error=pop_err,
-                message="Stash pop conflict. Resolve files manually, then run 'git stash drop' after verifying."
+                message="Stash pop conflict. Resolve files manually, then run 'git stash drop' after verifying.",
             )
 
         # Recheck final status
@@ -399,5 +400,5 @@ class GitService:
             after_status=final_status,
             duration=duration,
             operation="sync",
-            message="Successfully updated repository"
+            message="Successfully updated repository",
         )

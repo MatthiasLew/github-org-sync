@@ -1,7 +1,8 @@
 import json
-from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
 from github_org_sync.services.report_service import ReportService
+
 
 class ConfigManager:
     DEFAULT_CONFIG = {
@@ -20,13 +21,13 @@ class ConfigManager:
     def __init__(self) -> None:
         self.config_path = ReportService.get_config_path()
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Loads config from file, or returns defaults if missing/corrupt."""
         if not self.config_path.exists():
             return self.DEFAULT_CONFIG.copy()
-            
+
         try:
-            with open(self.config_path, "r", encoding="utf-8") as fh:
+            with self.config_path.open(encoding="utf-8") as fh:
                 data = json.load(fh)
                 # Merge with defaults to ensure all keys are present
                 config = self.DEFAULT_CONFIG.copy()
@@ -35,14 +36,14 @@ class ConfigManager:
         except Exception:
             return self.DEFAULT_CONFIG.copy()
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Saves current config back to disk."""
         try:
             # First load existing or start with empty
             current = self.load()
             current.update(config)
-            
-            with open(self.config_path, "w", encoding="utf-8") as fh:
+
+            with self.config_path.open("w", encoding="utf-8") as fh:
                 json.dump(current, fh, indent=2, ensure_ascii=False)
         except Exception:
             pass

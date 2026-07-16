@@ -1,20 +1,25 @@
 import json
 import shutil
 import subprocess
-from typing import Any
+
 from github_org_sync.models.repository import Repository
+
 
 class GitHubServiceError(Exception):
     pass
 
+
 class GitHubCLIMissingError(GitHubServiceError):
     pass
+
 
 class GitHubAuthError(GitHubServiceError):
     pass
 
+
 class OrganizationNotFoundError(GitHubServiceError):
     pass
+
 
 class GitHubService:
     def __init__(self) -> None:
@@ -27,12 +32,11 @@ class GitHubService:
         """
         if not self.gh_path:
             raise GitHubCLIMissingError("GitHub CLI (gh) is not installed or not in system PATH.")
-            
+
         try:
             cp = subprocess.run([self.gh_path, "--version"], text=True, capture_output=True, check=True)
             # The first line usually contains the version, e.g. "gh version 2.30.0"
-            first_line = cp.stdout.splitlines()[0] if cp.stdout else "gh version unknown"
-            return first_line
+            return cp.stdout.splitlines()[0] if cp.stdout else "gh version unknown"
         except (subprocess.SubprocessError, IndexError) as e:
             raise GitHubCLIMissingError(f"Failed to check GitHub CLI version: {e}") from e
 
@@ -44,15 +48,15 @@ class GitHubService:
         """
         if not self.gh_path:
             raise GitHubCLIMissingError("GitHub CLI (gh) is not installed.")
-            
+
         try:
             # gh auth status can exit with code 1 if not logged in
             cp = subprocess.run([self.gh_path, "auth", "status"], text=True, capture_output=True)
             output = (cp.stdout or "") + (cp.stderr or "")
-            
+
             if cp.returncode != 0:
                 raise GitHubAuthError(f"GitHub CLI authentication check failed (exit code {cp.returncode}):\n{output}")
-                
+
             # Parse user name from output if possible
             # e.g., "Logged in to github.com account MatthiasLew"
             return output.strip()
@@ -65,7 +69,7 @@ class GitHubService:
         """
         if not self.gh_path:
             raise GitHubCLIMissingError("GitHub CLI (gh) is not installed.")
-            
+
         try:
             # Fetch repos.
             # visibility is supported in gh CLI repo list json fields
@@ -80,7 +84,7 @@ class GitHubService:
                 "name,url,sshUrl,isArchived,isFork,defaultBranchRef,visibility",
             ]
             cp = subprocess.run(cmd, text=True, capture_output=True)
-            
+
             if cp.returncode != 0:
                 stderr_lower = cp.stderr.lower()
                 if "could not resolve to an organization" in stderr_lower or "not found" in stderr_lower:
@@ -88,17 +92,17 @@ class GitHubService:
                 if "authentication" in stderr_lower or "login" in stderr_lower:
                     raise GitHubAuthError("Authentication required or token expired. Run `gh auth login`.")
                 raise GitHubServiceError(f"GitHub CLI failed to list repositories:\n{cp.stderr}")
-                
+
             data = json.loads(cp.stdout or "[]")
             repos = []
             for item in data:
                 # visibility might not be returned in some versions or structures, fallback to private/public
                 visibility = item.get("visibility", "private").lower()
-                
+
                 # defaultBranchRef is an object: {"name": "main"}
                 default_branch_ref = item.get("defaultBranchRef") or {}
                 default_branch = default_branch_ref.get("name", "main")
-                
+
                 repos.append(
                     Repository(
                         name=item["name"],
@@ -111,7 +115,7 @@ class GitHubService:
                     )
                 )
             return repos
-            
+
         except subprocess.SubprocessError as e:
             raise GitHubServiceError(f"Subprocess error listing repositories: {e}") from e
         except json.JSONDecodeError as e:

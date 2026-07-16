@@ -2,50 +2,54 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
-from PySide6.QtCore import Qt, Slot
+from typing import Any
+
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
+    QCheckBox,
+    QFileDialog,
+    QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
-    QCheckBox,
-    QProgressBar,
-    QTextEdit,
-    QFileDialog,
+    QMainWindow,
     QMessageBox,
-    QFrame
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
+
 from github_org_sync.config import ConfigManager
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
 from github_org_sync.services.github_service import GitHubService, GitHubServiceError
-from github_org_sync.services.validation_service import ValidationService
 from github_org_sync.services.report_service import ReportService
+from github_org_sync.services.validation_service import ValidationService
 from github_org_sync.ui.repository_table import RepositoryTable
 from github_org_sync.ui.styles import get_stylesheet
 from github_org_sync.workers.sync_worker import SyncWorker
+
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("GitHub Organization Sync")
-        
+
         self.config_manager = ConfigManager()
         self.config = self.config_manager.load()
-        
+
         self.github_service = GitHubService()
-        self.repositories: List[Repository] = []
+        self.repositories: list[Repository] = []
         self.sync_worker: SyncWorker | None = None
         self.auth_user = "unknown"
-        
+
         # Reports tracker
         self.last_json_report: Path | None = None
         self.last_md_report: Path | None = None
+        self.table: RepositoryTable
 
         self._setup_ui()
         self._load_saved_settings()
@@ -140,15 +144,15 @@ class MainWindow(QMainWindow):
         btn_sel_all = QPushButton("Select All", self)
         btn_sel_all.setObjectName("btnOutline")
         btn_sel_all.clicked.connect(lambda: self.table.select_all())
-        
+
         btn_sel_none = QPushButton("Select None", self)
         btn_sel_none.setObjectName("btnOutline")
         btn_sel_none.clicked.connect(lambda: self.table.select_none())
-        
+
         btn_sel_missing = QPushButton("Select Missing", self)
         btn_sel_missing.setObjectName("btnOutline")
         btn_sel_missing.clicked.connect(lambda: self.table.select_missing())
-        
+
         btn_sel_outdated = QPushButton("Select Outdated", self)
         btn_sel_outdated.setObjectName("btnOutline")
         btn_sel_outdated.clicked.connect(lambda: self.table.select_outdated())
@@ -158,7 +162,7 @@ class MainWindow(QMainWindow):
         sel_layout.addWidget(btn_sel_missing)
         sel_layout.addWidget(btn_sel_outdated)
         sel_layout.addStretch()
-        
+
         main_layout.addWidget(selection_widget)
 
         # Repositories Table
@@ -216,14 +220,14 @@ class MainWindow(QMainWindow):
     def _load_saved_settings(self) -> None:
         self.org_input.setText(self.config.get("last_organization", ""))
         self.workspace_input.setText(self.config.get("last_workspace", ""))
-        
+
         self.cb_include_archived.setChecked(self.config.get("include_archived", False))
         self.cb_include_forks.setChecked(self.config.get("include_forks", True))
         self.cb_use_ssh.setChecked(self.config.get("use_ssh", False))
         self.cb_preserve_changes.setChecked(self.config.get("preserve_local_changes", True))
         self.cb_fetch_only.setChecked(self.config.get("fetch_only", False))
         self.cb_dry_run.setChecked(self.config.get("dry_run", False))
-        
+
         width = self.config.get("window_width", 1000)
         height = self.config.get("window_height", 700)
         self.resize(width, height)
@@ -238,25 +242,25 @@ class MainWindow(QMainWindow):
         self.config["preserve_local_changes"] = self.cb_preserve_changes.isChecked()
         self.config["fetch_only"] = self.cb_fetch_only.isChecked()
         self.config["dry_run"] = self.cb_dry_run.isChecked()
-        
+
         # Window size
         self.config["window_width"] = self.width()
         self.config["window_height"] = self.height()
-        
+
         self.config_manager.save(self.config)
-        
+
         # Stop worker if running
         if self.sync_worker and self.sync_worker.isRunning():
             self.sync_worker.cancel()
             self.sync_worker.wait()
-            
+
         super().closeEvent(event)
 
     def check_github_auth(self) -> None:
         try:
             self.github_service.check_cli_installed()
             auth_info = self.github_service.check_auth_status()
-            
+
             # extract username if possible
             # e.g., "Logged in to github.com account MatthiasLew"
             self.auth_user = "unknown"
@@ -265,7 +269,7 @@ class MainWindow(QMainWindow):
                     parts = line.split()
                     if parts:
                         self.auth_user = parts[-1]
-            
+
             self.auth_banner.hide()
             self.log(f"GitHub CLI initialized. Logged in as: {self.auth_user}")
         except GitHubServiceError as e:
@@ -297,19 +301,19 @@ class MainWindow(QMainWindow):
 
         self.log(f"Querying GitHub for organization: {org_name}")
         self._set_ui_busy(True)
-        
+
         try:
-            # We list repositories first (blocking UI temporarily, or we could thread it, 
+            # We list repositories first (blocking UI temporarily, or we could thread it,
             # but list is usually fast). To follow the instruction "GUI nie może się zawieszać"
             # we should avoid long blocking calls. But listing takes a brief moment. Let's do it
             # and then run the local inspection inside SyncWorker thread so the directory checking
             # (which can be slow on large workspaces) is fully async.
             all_repos = self.github_service.list_repositories(org_name)
-            
+
             # Apply filters
             include_archived = self.cb_include_archived.isChecked()
             include_forks = self.cb_include_forks.isChecked()
-            
+
             filtered_repos = []
             for repo in all_repos:
                 if repo.is_archived and not include_archived:
@@ -317,37 +321,37 @@ class MainWindow(QMainWindow):
                 if repo.is_fork and not include_forks:
                     continue
                 filtered_repos.append(repo)
-                
+
             self.repositories = filtered_repos
             self.log(f"Discovered {len(filtered_repos)} matching repositories.")
-            
+
             ws_path_str = self.workspace_input.text().strip()
             if not ws_path_str:
                 # If workspace is empty, we just fill the table as MISSING
                 self.table.set_repositories(self.repositories)
                 self._set_ui_busy(False)
                 return
-                
+
             ws_path = Path(ws_path_str)
-            
+
             # Start asynchronous local inspection
             self.progress_bar.setMaximum(len(self.repositories))
             self.progress_bar.setValue(0)
-            
+
             self.sync_worker = SyncWorker(
                 repositories=self.repositories,
                 workspace=ws_path,
                 org_name=org_name,
                 options={},
                 mode="inspect",
-                parent=self
+                parent=self,
             )
             self.sync_worker.progress_updated.connect(self._on_inspect_progress)
             self.sync_worker.log_emitted.connect(self.log)
             self.sync_worker.finished.connect(self._on_inspect_finished)
             self.sync_worker.error_occurred.connect(self._on_worker_error)
             self.sync_worker.start()
-            
+
         except Exception as e:
             self._set_ui_busy(False)
             QMessageBox.critical(self, "GitHub Error", f"Failed to load repositories:\n{e}")
@@ -372,7 +376,7 @@ class MainWindow(QMainWindow):
 
         org_text = self.org_input.text().strip()
         ws_text = self.workspace_input.text().strip()
-        
+
         try:
             org_name = ValidationService.normalize_org_name(org_text)
             ws_path = ValidationService.validate_workspace(ws_text)
@@ -385,7 +389,7 @@ class MainWindow(QMainWindow):
 
         self._set_ui_busy(True)
         self.btn_cancel.setEnabled(True)
-        
+
         self.progress_bar.setMaximum(len(selected_repos))
         self.progress_bar.setValue(0)
 
@@ -394,16 +398,11 @@ class MainWindow(QMainWindow):
             "preserve_local_changes": self.cb_preserve_changes.isChecked(),
             "fetch_only": self.cb_fetch_only.isChecked(),
             "dry_run": self.cb_dry_run.isChecked(),
-            "checkout_default": True # Always fetch and update using default branch option matching script
+            "checkout_default": True,  # Always fetch and update using default branch option matching script
         }
 
         self.sync_worker = SyncWorker(
-            repositories=selected_repos,
-            workspace=ws_path,
-            org_name=org_name,
-            options=options,
-            mode="sync",
-            parent=self
+            repositories=selected_repos, workspace=ws_path, org_name=org_name, options=options, mode="sync", parent=self
         )
         self.sync_worker.progress_updated.connect(self._on_sync_progress)
         self.sync_worker.log_emitted.connect(self.log)
@@ -417,10 +416,10 @@ class MainWindow(QMainWindow):
         self.table.update_repository_status(repo_name, status, message)
 
     @Slot(list, bool)
-    def _on_sync_finished(self, results: List[SyncResult], was_cancelled: bool) -> None:
+    def _on_sync_finished(self, results: list[SyncResult], was_cancelled: bool) -> None:
         self._set_ui_busy(False)
         self.btn_cancel.setEnabled(False)
-        
+
         if not results:
             self.log("Synchronization completed with empty results.")
             return
@@ -428,14 +427,14 @@ class MainWindow(QMainWindow):
         # Generate Reports
         org_name = ValidationService.normalize_org_name(self.org_input.text().strip())
         ws_path = Path(self.workspace_input.text().strip())
-        
+
         options = {
             "use_ssh": self.cb_use_ssh.isChecked(),
             "preserve_local_changes": self.cb_preserve_changes.isChecked(),
             "fetch_only": self.cb_fetch_only.isChecked(),
             "dry_run": self.cb_dry_run.isChecked(),
         }
-        
+
         try:
             json_path, md_path = ReportService.generate_reports(
                 organization=org_name,
@@ -443,7 +442,7 @@ class MainWindow(QMainWindow):
                 auth_user=self.auth_user,
                 protocol="ssh" if self.cb_use_ssh.isChecked() else "https",
                 options=options,
-                results=results
+                results=results,
             )
             self.last_json_report = json_path
             self.last_md_report = md_path
@@ -458,9 +457,9 @@ class MainWindow(QMainWindow):
             success_count = sum(1 for r in results if r.status in ("CLONED", "UPDATED", "UP_TO_DATE", "FETCHED"))
             fail_count = sum(1 for r in results if r.status in ("FAILED", "CONFLICT"))
             QMessageBox.information(
-                self, 
-                "Sync Finished", 
-                f"Synchronization completed.\n\nSuccessful: {success_count}\nFailed/Conflicts: {fail_count}"
+                self,
+                "Sync Finished",
+                f"Synchronization completed.\n\nSuccessful: {success_count}\nFailed/Conflicts: {fail_count}",
             )
 
     @Slot(str)
@@ -497,14 +496,16 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.warning(self, "Open Workspace Failed", f"Could not open workspace:\n{e}")
         else:
-            QMessageBox.warning(self, "Open Workspace Failed", "Workspace folder does not exist or has not been chosen.")
+            QMessageBox.warning(
+                self, "Open Workspace Failed", "Workspace folder does not exist or has not been chosen."
+            )
 
     def _set_ui_busy(self, busy: bool) -> None:
         self.btn_load.setEnabled(not busy)
         self.btn_choose_dir.setEnabled(not busy)
         self.btn_sync.setEnabled(not busy)
         self.org_input.setEnabled(not busy)
-        
+
         self.cb_include_archived.setEnabled(not busy)
         self.cb_include_forks.setEnabled(not busy)
         self.cb_use_ssh.setEnabled(not busy)

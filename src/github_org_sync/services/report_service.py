@@ -3,7 +3,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
 from github_org_sync.models.sync_result import SyncResult
+
 
 class ReportService:
     @staticmethod
@@ -50,13 +52,13 @@ class ReportService:
         reports_dir = cls.get_reports_dir()
         timestamp = datetime.now()
         timestamp_str = timestamp.strftime("%Y%m%d-%H%M%S")
-        
+
         json_filename = f"report-{organization}-{timestamp_str}.json"
         md_filename = f"report-{organization}-{timestamp_str}.md"
-        
+
         json_path = reports_dir / json_filename
         md_path = reports_dir / md_filename
-        
+
         # Prepare Report Data
         report_data = {
             "timestamp": timestamp.isoformat(),
@@ -76,13 +78,13 @@ class ReportService:
                     "error": r.error or "",
                 }
                 for r in results
-            ]
+            ],
         }
-        
+
         # 1. Save JSON Report
-        with open(json_path, "w", encoding="utf-8") as fh:
+        with json_path.open("w", encoding="utf-8") as fh:
             json.dump(report_data, fh, indent=2, ensure_ascii=False)
-            
+
         # 2. Save Markdown Report
         md_lines = [
             f"# Sync Report - {organization}",
@@ -97,32 +99,34 @@ class ReportService:
         ]
         for opt_key, opt_val in options.items():
             md_lines.append(f"- **{opt_key}:** {opt_val}")
-            
-        md_lines.extend([
-            "",
-            "## Repository Details",
-            "",
-            "| Repository | Operation | Before Status | After Status | Duration (s) | Result |",
-            "| :--- | :--- | :--- | :--- | :--- | :--- |"
-        ])
-        
+
+        md_lines.extend(
+            [
+                "",
+                "## Repository Details",
+                "",
+                "| Repository | Operation | Before Status | After Status | Duration (s) | Result |",
+                "| :--- | :--- | :--- | :--- | :--- | :--- |",
+            ]
+        )
+
         for r in results:
             status_symbol = "✅"
             if r.status in ("FAILED", "CONFLICT"):
                 status_symbol = "❌"
             elif r.status in ("WRONG_REMOTE", "BLOCKED", "DIRTY", "DIVERGED"):
                 status_symbol = "⚠️"
-                
+
             res_msg = r.message or ""
             if r.error:
                 res_msg += f" (Error: {r.error})"
-                
+
             md_lines.append(
                 f"| {r.repo_name} | {r.operation} | {r.before_status} | {status_symbol} {r.after_status} | {r.duration:.2f} | {res_msg} |"
             )
-            
+
         md_content = "\n".join(md_lines)
-        with open(md_path, "w", encoding="utf-8") as fh:
+        with md_path.open("w", encoding="utf-8") as fh:
             fh.write(md_content)
-            
+
         return json_path, md_path
