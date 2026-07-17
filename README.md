@@ -12,6 +12,24 @@
 - **Dynamic Operations Log**: Live output scroll showing exactly what the sync worker is executing.
 - **JSON & Markdown Reports**: Generates details reports stored locally in application data paths.
 
+## Windows Release
+
+To run the application on Windows without installing Python or setting up virtual environments:
+
+1. Download `github-org-sync-v1.0.0-windows-x64.zip` from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
+2. Extract the complete archive to a directory of your choice.
+3. Run `github-org-sync.exe` inside the extracted folder.
+
+*Important:* The application still requires external command-line tools to interact with Git and GitHub. Make sure you have installed:
+* [Git](https://git-scm.com/) (verify with `git --version`)
+* [GitHub CLI (gh)](https://cli.github.com/) (verify with `gh --version`)
+
+Before synchronizing private repositories, log in via the GitHub CLI:
+```powershell
+gh auth login
+gh auth status
+```
+
 ## Requirements
 - Python 3.11+
 - [Git](https://git-scm.com/) installed and on PATH.

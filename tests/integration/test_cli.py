@@ -57,3 +57,13 @@ def test_cli_sync(mock_cli_services, tmp_path) -> None:
     _, mock_sync, mock_report = mock_cli_services
     mock_sync.sync_repositories.assert_called_once()
     mock_report.generate_reports.assert_called_once()
+
+
+def test_cli_version(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    # Argparse may output to stdout or stderr depending on Python versions/environments
+    output = captured.out or captured.err
+    assert "github-org-sync 1.0.0" in output

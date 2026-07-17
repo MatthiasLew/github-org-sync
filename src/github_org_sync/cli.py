@@ -40,7 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
+    from github_org_sync import __version__
+
     parser = argparse.ArgumentParser(description="github-org-sync Command Line Interface")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"github-org-sync {__version__}",
+        help="Show version and exit",
+    )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Common arguments
