@@ -16,6 +16,11 @@ class ConfigManager:
         "include_forks": True,
         "window_width": 1000,
         "window_height": 700,
+        "window_x": -1,
+        "window_y": -1,
+        "language": "pl",
+        "theme": "System",
+        "column_widths": [],
     }
 
     def __init__(self) -> None:

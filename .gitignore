@@ -51,3 +51,4 @@ logs/
 reports/
 *.exe
 *.spec
+tests/tmp/

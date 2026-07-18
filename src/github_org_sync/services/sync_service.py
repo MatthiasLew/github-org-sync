@@ -35,12 +35,16 @@ class SyncService:
         workspace: Path,
         org_name: str,
         progress_callback: Callable[[int, int, str], None] | None = None,
+        is_cancelled_callback: Callable[[], bool] | None = None,
     ) -> list[Repository]:
         """
         Inspects the local directory for each repository and updates their status/branch/ahead/behind.
         """
         total = len(repositories)
         for idx, repo in enumerate(repositories):
+            if is_cancelled_callback and is_cancelled_callback():
+                break
+
             repo_path = workspace / repo.name
             repo.local_path = repo_path
 

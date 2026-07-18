@@ -1,3 +1,5 @@
+from collections.abc import Generator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,7 +10,7 @@ from github_org_sync.ui.main_window import MainWindow
 
 
 @pytest.fixture
-def mock_services() -> tuple[MagicMock, MagicMock]:
+def mock_services() -> Generator[tuple[MagicMock, MagicMock], None, None]:
     with (
         patch("github_org_sync.ui.main_window.GitHubService") as mock_gh_cls,
         patch("github_org_sync.config.ConfigManager.load") as mock_load,
@@ -38,7 +40,7 @@ def mock_services() -> tuple[MagicMock, MagicMock]:
         yield mock_gh, mock_gh_cls
 
 
-def test_main_window_creation(qtbot, mock_services) -> None:
+def test_main_window_creation(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 
@@ -47,8 +49,7 @@ def test_main_window_creation(qtbot, mock_services) -> None:
     assert window.auth_banner.isHidden()
 
 
-def test_load_repositories_flow(qtbot, mock_services) -> None:
-    mock_gh, _ = mock_services
+def test_load_repositories_flow(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 
@@ -62,7 +63,7 @@ def test_load_repositories_flow(qtbot, mock_services) -> None:
 
     # We patch check_local_statuses to execute synchronously or mock it
     with patch("github_org_sync.workers.sync_worker.SyncService.check_local_statuses") as mock_check:
-        mock_check.side_effect = lambda repos, ws, org, progress_callback: repos
+        mock_check.side_effect = lambda repos, ws, org, progress_callback, is_cancelled_callback: repos
 
         qtbot.mouseClick(window.btn_load, Qt.MouseButton.LeftButton)
 
@@ -78,7 +79,7 @@ def test_load_repositories_flow(qtbot, mock_services) -> None:
     assert window.repositories[1].name == "repo-c"
 
 
-def test_selection_buttons(qtbot, mock_services) -> None:
+def test_selection_buttons(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 

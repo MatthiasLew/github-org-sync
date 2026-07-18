@@ -4,4 +4,4 @@ try:
 
     __version__ = version("github-org-sync")
 except Exception:
-    __version__ = "1.0.0"
+    __version__ = "1.1.0"

@@ -20,7 +20,7 @@ def test_check_cli_installed_missing(mock_which: MagicMock) -> None:
 
 
 @patch("shutil.which")
-@patch("subprocess.run")
+@patch("github_org_sync.services.github_service.run_process")
 def test_check_cli_installed_present(mock_run: MagicMock, mock_which: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gh"
 
@@ -31,11 +31,11 @@ def test_check_cli_installed_present(mock_run: MagicMock, mock_which: MagicMock)
     service = GitHubService()
     ver = service.check_cli_installed()
     assert ver == "gh version 2.30.0 (2023-06-01)"
-    mock_run.assert_called_once_with(["/usr/bin/gh", "--version"], text=True, capture_output=True, check=True)
+    mock_run.assert_called_once_with(["/usr/bin/gh", "--version"], check=True)
 
 
 @patch("shutil.which")
-@patch("subprocess.run")
+@patch("github_org_sync.services.github_service.run_process")
 def test_check_auth_status_success(mock_run: MagicMock, mock_which: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gh"
 
@@ -51,7 +51,7 @@ def test_check_auth_status_success(mock_run: MagicMock, mock_which: MagicMock) -
 
 
 @patch("shutil.which")
-@patch("subprocess.run")
+@patch("github_org_sync.services.github_service.run_process")
 def test_check_auth_status_failed(mock_run: MagicMock, mock_which: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gh"
 
@@ -67,7 +67,7 @@ def test_check_auth_status_failed(mock_run: MagicMock, mock_which: MagicMock) ->
 
 
 @patch("shutil.which")
-@patch("subprocess.run")
+@patch("github_org_sync.services.github_service.run_process")
 def test_list_repositories_success(mock_run: MagicMock, mock_which: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gh"
 
@@ -114,7 +114,7 @@ def test_list_repositories_success(mock_run: MagicMock, mock_which: MagicMock) -
 
 
 @patch("shutil.which")
-@patch("subprocess.run")
+@patch("github_org_sync.services.github_service.run_process")
 def test_list_repositories_not_found(mock_run: MagicMock, mock_which: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gh"
 

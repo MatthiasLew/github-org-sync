@@ -51,22 +51,28 @@ class SyncWorker(QThread):
 
     def run_inspection(self) -> None:
         self.log_emitted.emit(f"Starting status inspection for organization: {self.org_name}")
-        len(self.repositories)
 
         def local_progress(index: int, total_count: int, repo_name: str) -> None:
             self.progress_updated.emit(index, total_count, repo_name, "CHECKING", "Inspecting local status...")
             self.log_emitted.emit(f"[{index}/{total_count}] Inspecting local directory for '{repo_name}'")
+
+        def check_cancelled() -> bool:
+            return self._is_cancelled
 
         self.sync_service.check_local_statuses(
             repositories=self.repositories,
             workspace=self.workspace,
             org_name=self.org_name,
             progress_callback=local_progress,
+            is_cancelled_callback=check_cancelled,
         )
 
-        self.log_emitted.emit("Local status inspection finished.")
-        # Wrap repos as results to emit them
-        self.finished.emit([], False)
+        if self._is_cancelled:
+            self.log_emitted.emit("Local status inspection cancelled by user.")
+            self.finished.emit([], True)
+        else:
+            self.log_emitted.emit("Local status inspection finished.")
+            self.finished.emit([], False)
 
     def run_sync(self) -> None:
         self.log_emitted.emit(f"Starting synchronization of {len(self.repositories)} repositories...")

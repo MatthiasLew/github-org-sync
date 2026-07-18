@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-18
+
+### Added
+- Polish and English interface languages with real-time switching.
+- System, Light, and Dark interface themes with automatic system color scheme detection.
+- Contextual tooltips for all fields, options, and actions.
+- Keyboard shortcuts for primary actions (Ctrl+L, Ctrl+R, Ctrl+Shift+S, Ctrl+F, F1).
+- Context menus for opening local directories or GitHub repo links.
+- Logs panel with Clear Log action and copy selection capabilities.
+- Repository search and Git status filters.
+- Dialog Help (Getting Started) and About (displaying version 1.1.0).
+- Windows execution parameters to hide subprocess terminal prompt windows silently.
+- Type checking markers (py.typed) for full PEP 561 compliance.
+
+### Fixed
+- Prevented command prompt console window flashing on Windows during Git and GitHub CLI operations.
+- Prevented duplicate background worker threads during workspace directory changes.
+- Fixed stale status results display by automatically resetting table items on workspace changes.
+- Safe thread cancellation checks during local status inspections.
+
 ## [1.0.0] - 2026-07-17
 
 ### Added

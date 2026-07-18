@@ -1,4 +1,7 @@
-from unittest.mock import patch
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,7 +11,7 @@ from github_org_sync.models.sync_result import SyncResult
 
 
 @pytest.fixture
-def mock_cli_services():
+def mock_cli_services() -> Generator[tuple[MagicMock, MagicMock, MagicMock], None, None]:
     with (
         patch("github_org_sync.cli.GitHubService") as mock_gh_cls,
         patch("github_org_sync.cli.SyncService") as mock_sync_cls,
@@ -34,7 +37,7 @@ def mock_cli_services():
         yield mock_gh, mock_sync, mock_report
 
 
-def test_cli_list(mock_cli_services) -> None:
+def test_cli_list(mock_cli_services: tuple[MagicMock, MagicMock, MagicMock]) -> None:
     # Run list subcommand
     rc = main(["list", "--org", "myorg"])
     assert rc == 0
@@ -42,7 +45,7 @@ def test_cli_list(mock_cli_services) -> None:
     mock_gh.list_repositories.assert_called_once_with("myorg")
 
 
-def test_cli_status(mock_cli_services, tmp_path) -> None:
+def test_cli_status(mock_cli_services: tuple[MagicMock, MagicMock, MagicMock], tmp_path: Path) -> None:
     # Run status subcommand
     rc = main(["status", "--org", "myorg", "--workspace", str(tmp_path)])
     assert rc == 0
@@ -50,7 +53,7 @@ def test_cli_status(mock_cli_services, tmp_path) -> None:
     mock_sync.check_local_statuses.assert_called_once()
 
 
-def test_cli_sync(mock_cli_services, tmp_path) -> None:
+def test_cli_sync(mock_cli_services: tuple[MagicMock, MagicMock, MagicMock], tmp_path: Path) -> None:
     # Run sync subcommand
     rc = main(["sync", "--org", "myorg", "--workspace", str(tmp_path), "--dry-run"])
     assert rc == 0
@@ -59,11 +62,11 @@ def test_cli_sync(mock_cli_services, tmp_path) -> None:
     mock_report.generate_reports.assert_called_once()
 
 
-def test_cli_version(capsys) -> None:
+def test_cli_version(capsys: Any) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     # Argparse may output to stdout or stderr depending on Python versions/environments
     output = captured.out or captured.err
-    assert "github-org-sync 1.0.0" in output
+    assert "github-org-sync 1.1.0" in output

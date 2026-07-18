@@ -3,6 +3,7 @@ import shutil
 import subprocess
 
 from github_org_sync.models.repository import Repository
+from github_org_sync.utils.process import run_process
 
 
 class GitHubServiceError(Exception):
@@ -34,7 +35,7 @@ class GitHubService:
             raise GitHubCLIMissingError("GitHub CLI (gh) is not installed or not in system PATH.")
 
         try:
-            cp = subprocess.run([self.gh_path, "--version"], text=True, capture_output=True, check=True)
+            cp = run_process([self.gh_path, "--version"], check=True)
             # The first line usually contains the version, e.g. "gh version 2.30.0"
             return cp.stdout.splitlines()[0] if cp.stdout else "gh version unknown"
         except (subprocess.SubprocessError, IndexError) as e:
@@ -51,7 +52,7 @@ class GitHubService:
 
         try:
             # gh auth status can exit with code 1 if not logged in
-            cp = subprocess.run([self.gh_path, "auth", "status"], text=True, capture_output=True)
+            cp = run_process([self.gh_path, "auth", "status"])
             output = (cp.stdout or "") + (cp.stderr or "")
 
             if cp.returncode != 0:
@@ -83,7 +84,7 @@ class GitHubService:
                 "--json",
                 "name,url,sshUrl,isArchived,isFork,defaultBranchRef,visibility",
             ]
-            cp = subprocess.run(cmd, text=True, capture_output=True)
+            cp = run_process(cmd)
 
             if cp.returncode != 0:
                 stderr_lower = cp.stderr.lower()

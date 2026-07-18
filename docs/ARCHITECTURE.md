@@ -1,6 +1,6 @@
 # Architecture Documentation - GitHub Organization Sync
 
-This document describes the architectural design and boundaries of responsibility for the `github-org-sync` application.
+This document describes the architectural design, layer boundaries, and internal systems of the `github-org-sync` application.
 
 ## High-Level Diagram
 
@@ -9,6 +9,7 @@ graph TD
     subgraph UI Layer
         A[MainWindow] --> B[RepositoryTable]
         A --> C[styles.py]
+        A --> M[translator.py]
     end
 
     subgraph Operations Layer
@@ -24,6 +25,10 @@ graph TD
         K[ConfigManager]
     end
 
+    subgraph Utilities Layer
+        P[process.py helper]
+    end
+
     subgraph External Systems
         J[GitHub CLI gh]
         L[Git CLI]
@@ -33,8 +38,10 @@ graph TD
     D -->|Calls| E
     E -->|Uses| G
     E -->|Uses| F
-    F -->|Executes| J
-    G -->|Executes| L
+    F -->|Executes via| P
+    G -->|Executes via| P
+    P -->|Spawns| J
+    P -->|Spawns| L
     A -->|Uses| H
     A -->|Uses| I
     A -->|Uses| K
@@ -42,29 +49,34 @@ graph TD
 
 ---
 
-## 1. GUI Layer (`ui/`)
-- **MainWindow (`ui/main_window.py`)**: The visual entry point. Orchestrates the layouts, options check-boxes, signals from/to worker threads, config loading/saving, and reports trigger.
-- **RepositoryTable (`ui/repository_table.py`)**: Custom table widget extending `QTableWidget` to represent repository data (visibility, archived status, checked states, operation actions) and applying consistent soft-status color highlights.
-- **Styles (`ui/styles.py`)**: Holds the application CSS theme. Provides high-fidelity aesthetics with slate/blue/violet colors, focus rings, hover transitions, and progress bar style.
+## 1. Central Subprocess Execution (`utils/process.py`)
+To prevent command prompt console windows from flashing on Windows during synchronization, all subprocess invocations are routed through a central helper:
+- **`run_process`** and **`popen_process`**: Wrappers for `subprocess.run` and `subprocess.Popen` that automatically append `creationflags=subprocess.CREATE_NO_WINDOW` (value `0x08000000`) if executing on the Windows platform.
+- **Cross-platform Safety**: The `creationflags` argument is never set on Linux or macOS. Subprocess execution remains completely non-interactive (no `shell=True`) using structured list arguments.
 
-## 2. Operations Layer (`workers/`)
-- **SyncWorker (`workers/sync_worker.py`)**: Runs asynchronously by inheriting from `QThread`. Prevents blocking/freezing the Qt GUI main thread. Utilizes Qt Signals (`progress_updated`, `log_emitted`, `finished`, `error_occurred`) to securely update GUI states. Supports safe cooperative cancellation via an internal flag.
+## 2. Localization & Translation Engine (`i18n/`)
+Version 1.1.0 introduces a real-time translation module:
+- **Translations Schema (`i18n/translations.py`)**: A centralized nested dictionary containing comprehensive Polish (`pl`) and English (`en`) localized phrases for buttons, labels, check-boxes, tooltips, dialogs, warnings, and Git status states.
+- **Translator Manager (`i18n/translator.py`)**: A singleton class managing active language state, persisting user selection in local configurations, and providing helper function `_t` to resolve translation keys. Retranslation takes place in real-time without restarting the application by calling `MainWindow.retranslate_ui()`.
 
-## 3. Service Layer (`services/`)
-- **SyncService (`services/sync_service.py`)**: High-level workflow orchestrator. Handles filtering lists of repositories, updating local directory mappings, checking local state directories, and sequencing execution queues.
-- **GitHubService (`services/github_service.py`)**: Encapsulates all interface operations with the GitHub CLI (`gh`). Performs version checking, authentication status queries, and repository list fetching.
-- **GitService (`services/git_service.py`)**: Core Git command engine. Checks repository states, extracts tracking branch ahead/behind values, handles safe non-destructive pulls (`--ff-only`), and executes safe autostash operations.
-- **ValidationService (`services/validation_service.py`)**: Handles normalizing inputs (converting SSH and HTTPS org URLs to organization names) and validates path properties.
-- **ReportService (`services/report_service.py`)**: Handles formatting and writing JSON and Markdown report summaries to the application data directory.
+## 3. Dynamic Stylesheet & Theme System (`ui/styles.py`)
+Styling supports **System**, **Light**, and **Dark** themes:
+- **Adaptive System Theme**: `is_system_dark()` queries PySide6 style hints color scheme API (`QGuiApplication.styleHints().colorScheme()`) with a fallback querying the Windows Registry (`AppsUseLightTheme` under `Themes\Personalize`) to dynamically render dark/light modes matching OS parameters.
+- **QSS Stylesheets**: Dedicated, high-contrast Slate stylesheets for dark (`DARK_STYLESHEET`) and light (`LIGHT_STYLESHEET`) configurations.
 
-## 4. Models (`models/`)
-- **Repository (`models/repository.py`)**: Simple dataclass containing Git and GitHub repository state metadata.
-- **SyncResult (`models/sync_result.py`)**: Dataclass modeling the outcome of a single repository sync execution.
-- **Organization (`models/organization.py`)**: Simple dataclass storing organization details.
+## 4. UI Layer (`ui/`)
+- **MainWindow (`ui/main_window.py`)**: Entry point of the GUI. Houses window position and column width persistence, setups hotkeys (`Ctrl+L`, `Ctrl+R`, etc.), and manages the GUI State Machine.
+- **RepositoryTable (`ui/repository_table.py`)**: QTableWidget subclass. Manages row filtering by name and status, implements column sorting, and handles double-click folder opening and right-click context menus.
+- **GUI State Machine**: Controls element accessibility across defined states:
+  - `IDLE`: Inputs and synchronization actions are fully editable.
+  - `LOADING_REPOSITORIES`: Querying GitHub CLI in background. Disables synchronization and configuration changes.
+  - `INSPECTING_WORKSPACE`: Querying local repositories in thread. Disables synchronization. Allows cancellation.
+  - `SYNCING`: Actively cloning and updating. Disables configurations and directories adjustments. Allows cancellation.
+  - `CANCELLING`: Cancellation request submitted, waiting for current worker loop iteration to stop.
 
----
-
-## Boundaries of Responsibility
-- **No Direct Subprocess in UI**: The UI classes MUST NEVER call subprocesses directly. All system calls go through `GitService` or `GitHubService` and must be executed in background worker threads.
-- **No Force Operations**: Under no circumstances should GitService run force pushes, cleanings, rebases, or checkouts that could lead to user data loss.
-- **Secrets Isolation**: No OAuth tokens or credentials should be logged, written to files, or stored in code. Authentication is delegated entirely to the external `gh` CLI.
+## 5. Operations & Worker Lifecycle (`workers/` & `services/`)
+- **Worker Execution (`workers/sync_worker.py`)**: Threaded operations running in `QThread` to prevent freezing the GUI.
+- **Cooperative Cancellation**: Standard cooperative checking. `SyncService.check_local_statuses` and `SyncService.sync_repositories` accept an `is_cancelled_callback` checked between repository loops to terminate cleanly.
+- **Race Condition Prevention**:
+  - Direct helper `_cancel_active_worker()` terminates any running thread before a new one is spawned.
+  - Modifying the Workspace path instantly invalidates local status entries in the table, resetting values to `MISSING` and stopping active inspections to prevent writing stale status results to a newly selected workspace.

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
+from github_org_sync.utils.process import run_process
 
 
 class GitService:
@@ -15,18 +16,20 @@ class GitService:
     def _run_git(self, cwd: Path | None, args: list[str]) -> subprocess.CompletedProcess[str]:
         if not self.git_path:
             raise FileNotFoundError("Git is not installed or not in system PATH.")
-        return subprocess.run([self.git_path, *args], cwd=cwd, text=True, capture_output=True)
+        return run_process([self.git_path, *args], cwd=cwd)
 
     def is_git_repository(self, path: Path) -> bool:
         """Checks if the path is a git repository."""
         if not path.is_dir():
             return False
-        # Either check for .git directory or run git rev-parse --is-inside-work-tree
         if (path / ".git").exists():
             return True
         try:
-            cp = self._run_git(path, ["rev-parse", "--is-inside-work-tree"])
-            return cp.returncode == 0
+            cp = self._run_git(path, ["rev-parse", "--show-toplevel"])
+            if cp.returncode == 0:
+                toplevel = Path(cp.stdout.strip()).resolve()
+                return toplevel == path.resolve()
+            return False
         except Exception:
             return False
 

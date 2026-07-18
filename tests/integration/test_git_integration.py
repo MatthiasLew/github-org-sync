@@ -291,6 +291,7 @@ def test_git_scenario_g_stash_conflict(tmp_path):
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name, preserve_local_changes=True)
     assert res.status == "CONFLICT"
+    assert res.message is not None
     assert "conflict" in res.message.lower()
 
 

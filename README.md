@@ -2,21 +2,30 @@
 
 `github-org-sync` is a cross-platform desktop and command-line application built with Python 3.11+, PySide6, and the GitHub CLI. It provides a visual and automated way to discover, clone, and update all repositories belonging to any GitHub organization.
 
-![GUI Mockup Place Holder](docs/images/gui_screenshot.png)
+![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
-## Features
-- **Organization Repository Discovery**: Fetch all repositories of any organization you have access to.
-- **Git State Assessment**: Identifies local status (up-to-date, missing, modified/dirty, ahead, behind, diverged, wrong remote).
-- **Safe Git Operations**: Auto-stash changes when updating, fast-forward pulls only, avoids destructive actions (like hard resets).
-- **Asynchronous Execution**: PySide6 thread worker prevents GUI freeze during operations.
-- **Dynamic Operations Log**: Live output scroll showing exactly what the sync worker is executing.
-- **JSON & Markdown Reports**: Generates details reports stored locally in application data paths.
+## New in Version 1.1.0
+- **Multi-language Interface**: Switch between **Polski** and **English** in real-time under `Settings -> Language` (or `Ustawienia -> Język`). Language choices are persisted.
+- **Theme Selection**: Choose between **System**, **Light**, or **Dark** themes under `Settings -> Theme` (or `Ustawienia -> Motyw`). System theme matches OS settings automatically.
+- **Context Menus**: Right-click any repository row to open its local folder or view its homepage on GitHub. Copy console messages to your clipboard with a right-click on the log panel.
+- **Improved Workspace Lifecycle**: Invalidate local status instantly when changing workspace paths, stopping background workers safely to avoid race conditions.
+- **Table Search & Status Filters**: Filter by repository name or status (Missing, Up to date, Local changes, Behind, Ahead, Diverged, Errors).
+- **Column Sorting & Width Persistence**: Sort columns by clicking headers. Custom column widths, window size, and positions are remembered.
+- **Silent execution on Windows**: All Git and GitHub CLI subprocesses are executed without flashing command prompt windows (`CREATE_NO_WINDOW`).
+- **Data Validation & Pre-Sync Summaries**: Validates organization inputs and workspace folders, displaying a settings summary dialog before starting synchronization.
+- **Shortcuts support**:
+  - `Ctrl+L` - Load repositories
+  - `Ctrl+R` - Refresh status
+  - `Ctrl+Shift+S` - Sync selected
+  - `Ctrl+F` - Focus search input
+  - `F1` - Getting Started Guide
+- **Getting Started Guide & About Dialog**: Instantly accessible guides available under the `Help` menu.
 
-## Windows Release
+## Windows Release Installation
 
-To run the application on Windows without installing Python or setting up virtual environments:
+To run the application on Windows without installing Python:
 
-1. Download `github-org-sync-v1.0.0-windows-x64.zip` from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
+1. Download the release package (`github-org-sync-v1.1.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
 2. Extract the complete archive to a directory of your choice.
 3. Run `github-org-sync.exe` inside the extracted folder.
 
@@ -30,12 +39,12 @@ gh auth login
 gh auth status
 ```
 
-## Requirements
+## Developer Guide & Requirements
 - Python 3.11+
 - [Git](https://git-scm.com/) installed and on PATH.
 - [GitHub CLI (gh)](https://cli.github.com/) installed and authenticated.
 
-## Installation
+### Installation
 1. Clone the repository:
    ```bash
    git clone https://github.com/MatthiasLew/github-org-sync.git
@@ -49,7 +58,7 @@ gh auth status
    # On Linux/macOS:
    source .venv/bin/activate
    ```
-3. Install dependencies:
+3. Install dependencies and the package:
    ```bash
    pip install -e .[dev]
    ```
@@ -59,10 +68,6 @@ gh auth status
 Run the desktop GUI via:
 ```bash
 python -m github_org_sync
-```
-or
-```bash
-python -m github_org_sync.app
 ```
 
 ### CLI Mode
@@ -76,24 +81,8 @@ python -m github_org_sync.cli sync --org subactor --workspace C:\Users\Praca\for
 ```
 Add `--dry-run` to run without performing any local modifications.
 
-## GitHub CLI Authentication
-Ensure you are authenticated:
-```bash
-gh auth status
-```
-If not logged in, run:
-```bash
-gh auth login
-```
-*Note: Make sure your credentials have scopes to read the organization's repositories.*
-
-## Safety Constraints
-- Only updates repositories if the local `origin` URL matches the target organization (`github.com/org-name/repo-name`). If it doesn't, status is marked as `WRONG_REMOTE` and sync is skipped.
-- Does not run `git reset --hard` or `git clean`.
-- Stores configurations and execution reports in `<user-app-data>/github-org-sync/`.
-
 ## Running Tests
-Run tests using:
+Run the test suite using:
 ```bash
 python -m pytest -q
 ```
@@ -104,7 +93,3 @@ To build a standalone executable on Windows:
 .\scripts\build_windows.ps1
 ```
 The output executable will be placed in the `dist/` directory.
-
-## Limitations & Roadmap
-- Git operations require local Git and GitHub CLI.
-- No direct multi-threaded parallel cloning to avoid disk/network bottlenecks and GitHub API rate limits.
