@@ -253,6 +253,10 @@ def test_warn_close_on_active_sync(qtbot: Any, mock_services: tuple[MagicMock, M
         window.closeEvent(event)
         assert event.isAccepted()
 
+    # Clean up to prevent hanging during qtbot teardown
+    mock_worker.isRunning.return_value = False
+    window.sync_worker = None
+
 
 def test_load_change_workspace_inspect_flow(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
     """
