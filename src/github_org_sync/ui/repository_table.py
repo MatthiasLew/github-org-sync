@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QBrush, QColor
+from PySide6.QtGui import QAction, QBrush, QColor, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -20,6 +20,30 @@ from PySide6.QtWidgets import (
 from github_org_sync.i18n import _t
 from github_org_sync.models.repository import Repository
 from github_org_sync.utils.process import run_process
+
+
+class CheckboxTableWidgetItem(QTableWidgetItem):
+    def __init__(self, checkbox: QCheckBox) -> None:
+        super().__init__()
+        self.checkbox = checkbox
+
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        if isinstance(other, CheckboxTableWidgetItem):
+            return int(self.checkbox.isChecked()) < int(other.checkbox.isChecked())
+        return super().__lt__(other)
+
+
+class NumericTableWidgetItem(QTableWidgetItem):
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        try:
+            self_val = int(self.text())
+        except ValueError:
+            self_val = -1 if self.text() == "" else 0
+        try:
+            other_val = int(other.text())
+        except ValueError:
+            other_val = -1 if other.text() == "" else 0
+        return self_val < other_val
 
 
 class RepositoryTable(QTableWidget):
@@ -80,6 +104,10 @@ class RepositoryTable(QTableWidget):
         """Translates the headers and any visible translatable fields."""
         labels = [_t(key) for key in self.COLUMNS]
         self.setHorizontalHeaderLabels(labels)
+        for idx, col_key in enumerate(self.COLUMNS):
+            item = self.horizontalHeaderItem(idx)
+            if item:
+                item.setToolTip(_t(f"tip_{col_key}"))
 
         # Retranslate row statuses if repositories are loaded
         for idx in range(self.rowCount()):
@@ -125,6 +153,7 @@ class RepositoryTable(QTableWidget):
             layout.setContentsMargins(0, 0, 0, 0)
             self.setCellWidget(idx, 0, checkbox_widget)
             self.checkbox_map[repo.name] = cb
+            self.setItem(idx, 0, CheckboxTableWidgetItem(cb))
 
             # Column 1: Repository Name
             name_item = QTableWidgetItem(repo.name)
@@ -148,11 +177,11 @@ class RepositoryTable(QTableWidget):
 
             # Column 6: Ahead
             ahead_val = str(repo.ahead) if repo.ahead is not None else ""
-            self.setItem(idx, 6, QTableWidgetItem(ahead_val))
+            self.setItem(idx, 6, NumericTableWidgetItem(ahead_val))
 
             # Column 7: Behind
             behind_val = str(repo.behind) if repo.behind is not None else ""
-            self.setItem(idx, 7, QTableWidgetItem(behind_val))
+            self.setItem(idx, 7, NumericTableWidgetItem(behind_val))
 
             # Column 8: Action
             action_text = self._determine_action(repo)
@@ -330,7 +359,22 @@ class RepositoryTable(QTableWidget):
     def filter_rows(self, search_text: str, status_filter: str) -> None:
         """Hides rows that do not match search query and status filter."""
         search_text = search_text.lower().strip()
-        status_filter_lower = status_filter.lower().strip()
+
+        # Resolve status filter translation back to translation key
+        status_key = None
+        for key in [
+            "filter_status_all",
+            "state_MISSING",
+            "state_UP_TO_DATE",
+            "state_DIRTY",
+            "state_BEHIND",
+            "state_AHEAD",
+            "state_DIVERGED",
+            "filter_status_errors",
+        ]:
+            if _t(key) == status_filter:
+                status_key = key
+                break
 
         for row in range(self.rowCount()):
             name_item = self.item(row, 1)
@@ -338,31 +382,36 @@ class RepositoryTable(QTableWidget):
 
             # Check status filter
             matches_status = True
-            if (
-                status_filter_lower
-                and status_filter_lower != "all"
-                and status_filter_lower != _t("filter_status_all").lower()
-            ):
+            if status_key and status_key != "filter_status_all":
                 repo_name = name_item.text() if name_item else ""
                 repo = next((r for r in self.repositories if r.name == repo_name), None)
                 if repo:
-                    raw_status = repo.status.lower()
-                    if status_filter_lower in ("errors", "błędy"):
-                        matches_status = raw_status in ("failed", "conflict", "wrong_remote")
-                    elif status_filter_lower in ("missing", "brak"):
-                        matches_status = raw_status == "missing"
-                    elif status_filter_lower in ("dirty", "lokalne zmiany"):
-                        matches_status = raw_status == "dirty"
-                    elif status_filter_lower in ("behind", "zaległe commity"):
-                        matches_status = raw_status == "behind"
-                    elif status_filter_lower in ("ahead", "lokalne commity"):
-                        matches_status = raw_status == "ahead"
-                    elif status_filter_lower in ("diverged", "rozbieżne"):
-                        matches_status = raw_status == "diverged"
-                    elif status_filter_lower in ("up to date", "aktualne"):
-                        matches_status = raw_status == "up_to_date"
-                    else:
-                        matches_status = status_filter_lower in raw_status
+                    raw_status = repo.status
+                    if status_key == "filter_status_errors":
+                        matches_status = raw_status in ("FAILED", "CONFLICT", "WRONG_REMOTE")
+                    elif status_key == "state_MISSING":
+                        matches_status = raw_status == "MISSING"
+                    elif status_key == "state_DIRTY":
+                        matches_status = raw_status == "DIRTY"
+                    elif status_key == "state_BEHIND":
+                        matches_status = raw_status == "BEHIND"
+                    elif status_key == "state_AHEAD":
+                        matches_status = raw_status == "AHEAD"
+                    elif status_key == "state_DIVERGED":
+                        matches_status = raw_status == "DIVERGED"
+                    elif status_key == "state_UP_TO_DATE":
+                        matches_status = raw_status == "UP_TO_DATE"
 
             matches_search = not search_text or (search_text in name)
             self.setRowHidden(row, not (matches_search and matches_status))
+
+    def paintEvent(self, event: Any) -> None:
+        super().paintEvent(event)
+        if self.rowCount() == 0:
+            painter = QPainter(self.viewport())
+            font = painter.font()
+            font.setPointSize(11)
+            painter.setFont(font)
+            painter.setPen(QColor("#64748b"))
+            text = _t("empty_state_text")
+            painter.drawText(self.viewport().rect(), Qt.AlignmentFlag.AlignCenter, text)
