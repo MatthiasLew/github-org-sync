@@ -75,21 +75,21 @@ def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_se
 
     mock_git_service.clone.return_value = SyncResult(
         repo_name="repo1",
-        status="CLONED",
+        requested_action="CLONE",
+        performed_action="CLONED",
         before_status="MISSING",
         after_status="UP_TO_DATE",
         duration=1.0,
-        operation="clone",
-        message="Cloned",
+        result="Cloned",
     )
     mock_git_service.sync.return_value = SyncResult(
         repo_name="repo3",
-        status="UP_TO_DATE",
+        requested_action="SYNC",
+        performed_action="UPDATED",
         before_status="UP_TO_DATE",
         after_status="UP_TO_DATE",
         duration=0.5,
-        operation="sync",
-        message="Sync",
+        result="Sync",
     )
 
     workspace = Path("/dummy/workspace")
@@ -99,16 +99,16 @@ def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_se
 
     # repo1
     assert results[0].repo_name == "repo1"
-    assert results[0].status == "CLONED"
+    assert results[0].performed_action == "CLONED"
 
     # repo2 skipped
     assert results[1].repo_name == "repo2"
-    assert results[1].status == "WRONG_REMOTE"
-    assert results[1].operation == "skip"
+    assert results[1].performed_action == "SKIPPED"
+    assert results[1].requested_action == "SYNC"
 
     # repo3 sync
     assert results[2].repo_name == "repo3"
-    assert results[2].status == "UP_TO_DATE"
+    assert results[2].performed_action == "UPDATED"
 
 
 def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_service: MagicMock) -> None:
@@ -119,12 +119,12 @@ def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_serv
 
     mock_git_service.clone.return_value = SyncResult(
         repo_name="repo1",
-        status="CLONED",
+        requested_action="CLONE",
+        performed_action="CLONED",
         before_status="MISSING",
         after_status="UP_TO_DATE",
         duration=1.0,
-        operation="clone",
-        message="Cloned",
+        result="Cloned",
     )
 
     # Cancel after first repo is synced
@@ -141,14 +141,30 @@ def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_serv
     )
 
     assert len(results) == 2
-    assert results[0].status == "CLONED"
-    assert results[1].status == "CANCELLED"
+    assert results[0].performed_action == "CLONED"
+    assert results[1].performed_action == "CANCELLED"
 
 
 def test_report_service_generation(tmp_path: Path) -> None:
     results = [
-        SyncResult("repo1", "CLONED", "MISSING", "UP_TO_DATE", 1.2, "clone", message="Cloned"),
-        SyncResult("repo2", "FAILED", "UP_TO_DATE", "UP_TO_DATE", 0.5, "sync", error="Error message"),
+        SyncResult(
+            repo_name="repo1",
+            requested_action="CLONE",
+            performed_action="CLONED",
+            before_status="MISSING",
+            after_status="UP_TO_DATE",
+            duration=1.2,
+            result="Cloned",
+        ),
+        SyncResult(
+            repo_name="repo2",
+            requested_action="SYNC",
+            performed_action="FAILED",
+            before_status="UP_TO_DATE",
+            after_status="UP_TO_DATE",
+            duration=0.5,
+            error="Error message",
+        ),
     ]
 
     with patch.object(ReportService, "get_reports_dir") as mock_reports_dir:

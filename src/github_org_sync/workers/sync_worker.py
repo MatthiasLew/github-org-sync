@@ -78,11 +78,11 @@ class SyncWorker(QThread):
         self.log_emitted.emit(f"Starting synchronization of {len(self.repositories)} repositories...")
 
         def sync_progress(index: int, total_count: int, repo: Repository, res: SyncResult) -> None:
-            status_text = res.status
-            msg_text = res.message or res.error or ""
+            status_text = res.after_status
+            msg_text = res.result or res.error or ""
 
             # Emit log details
-            log_line = f"[{index}/{total_count}] Repository '{repo.name}' -> Operation: {res.operation.upper()} | Status: {status_text}"
+            log_line = f"[{index}/{total_count}] Repository '{repo.name}' -> Operation: {res.performed_action.upper()} | Status: {status_text}"
             if msg_text:
                 log_line += f" | Details: {msg_text}"
             self.log_emitted.emit(log_line)

@@ -22,16 +22,16 @@ def print_summary(results: list[SyncResult]) -> int:
 
     counts: dict[str, int] = {}
     for res in results:
-        counts[res.status] = counts.get(res.status, 0) + 1
+        counts[res.after_status] = counts.get(res.after_status, 0) + 1
 
     for status, count in sorted(counts.items()):
         print(f"{status + ':':<20} {count:>5}")
     print("=" * 60)
 
     # Check for failures or conflicts
-    if any(r.status in ("FAILED") for r in results):
+    if any(r.after_status in ("FAILED") for r in results):
         return EXIT_ERROR
-    if any(r.status in ("CONFLICT", "DIVERGED", "BLOCKED", "WRONG_REMOTE") for r in results):
+    if any(r.after_status in ("CONFLICT", "DIVERGED", "BLOCKED", "WRONG_REMOTE") for r in results):
         return EXIT_REPO_STATE
     return EXIT_OK
 
@@ -168,8 +168,8 @@ def main(argv: list[str] | None = None) -> int:
 
             # Sync
             def progress_sync(curr: int, tot: int, repo: Repository, res: SyncResult) -> None:
-                status_text = res.status
-                msg_text = res.message or res.error or ""
+                status_text = res.after_status
+                msg_text = res.result or res.error or ""
                 details = f": {msg_text}" if msg_text else ""
                 print(f"[{curr}/{tot}] {repo.name} -> {status_text}{details}")
 

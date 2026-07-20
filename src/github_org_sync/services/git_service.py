@@ -2,6 +2,7 @@ import re
 import shutil
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
 from github_org_sync.models.repository import Repository
@@ -113,12 +114,12 @@ class GitService:
         if dry_run:
             return SyncResult(
                 repo_name=repo.name,
-                status="READY_TO_CLONE",
+                requested_action="CLONE",
+                performed_action="NO_CHANGE",
                 before_status="MISSING",
                 after_status="MISSING",
+                result=f"[DRY-RUN] Would clone {url} to {dest_path}",
                 duration=0.0,
-                operation="clone",
-                message=f"[DRY-RUN] Would clone {url} to {dest_path}",
             )
 
         try:
@@ -132,34 +133,34 @@ class GitService:
                 err_msg = (cp.stderr or cp.stdout).strip()
                 return SyncResult(
                     repo_name=repo.name,
-                    status="FAILED",
+                    requested_action="CLONE",
+                    performed_action="FAILED",
                     before_status="MISSING",
                     after_status="MISSING",
                     duration=duration,
-                    operation="clone",
                     error=err_msg,
-                    message=f"Clone failed: {err_msg}",
+                    result=f"Clone failed: {err_msg}",
                 )
 
             return SyncResult(
                 repo_name=repo.name,
-                status="CLONED",
+                requested_action="CLONE",
+                performed_action="CLONED",
                 before_status="MISSING",
                 after_status="UP_TO_DATE",
                 duration=duration,
-                operation="clone",
-                message="Successfully cloned repository",
+                result="Successfully cloned repository",
             )
         except Exception as e:
             return SyncResult(
                 repo_name=repo.name,
-                status="FAILED",
+                requested_action="CLONE",
+                performed_action="FAILED",
                 before_status="MISSING",
                 after_status="MISSING",
                 duration=time.time() - start_time,
-                operation="clone",
                 error=str(e),
-                message=f"Exception during clone: {e}",
+                result=f"Exception during clone: {e}",
             )
 
     def get_default_branch(self, path: Path) -> str | None:
@@ -194,13 +195,13 @@ class GitService:
         if not path or not path.exists():
             return SyncResult(
                 repo_name=repo.name,
-                status="FAILED",
+                requested_action="FETCH" if fetch_only else "SYNC",
+                performed_action="FAILED",
                 before_status="MISSING",
                 after_status="MISSING",
                 duration=0.0,
-                operation="sync",
                 error="Local path does not exist",
-                message="Local path does not exist",
+                result="Local path does not exist",
             )
 
         # 1. Assess initial status
@@ -208,25 +209,33 @@ class GitService:
         if status in ("NOT_A_REPOSITORY", "WRONG_REMOTE", "FAILED"):
             return SyncResult(
                 repo_name=repo.name,
-                status=status,
+                requested_action="FETCH" if fetch_only else "SYNC",
+                performed_action="FAILED",
                 before_status=status,
                 after_status=status,
                 duration=0.0,
-                operation="sync",
                 error=init_msg,
-                message=init_msg,
+                result=init_msg,
             )
+
+        # Fetch count of dirty files
+        dirty_files = self.get_dirty_files(path)
+        dirty_count = len(dirty_files)
 
         if dry_run:
             duration = time.time() - start_time
             return SyncResult(
                 repo_name=repo.name,
-                status=status,
+                requested_action="FETCH" if fetch_only else "SYNC",
+                performed_action="NO_CHANGE",
                 before_status=status,
                 after_status=status,
                 duration=duration,
-                operation="sync",
-                message=f"[DRY-RUN] Would fetch and update (fetch_only={fetch_only})",
+                local_branch=init_branch,
+                ahead=ahead,
+                behind=behind,
+                dirty_file_count=dirty_count,
+                result=f"[DRY-RUN] Would fetch and update (fetch_only={fetch_only})",
             )
 
         # 2. Fetch changes
@@ -236,27 +245,36 @@ class GitService:
             err_msg = (cp_fetch.stderr or cp_fetch.stdout).strip()
             return SyncResult(
                 repo_name=repo.name,
-                status="FAILED",
+                requested_action="FETCH" if fetch_only else "SYNC",
+                performed_action="FAILED",
                 before_status=status,
                 after_status=status,
                 duration=duration,
-                operation="sync",
+                local_branch=init_branch,
+                ahead=ahead,
+                behind=behind,
+                dirty_file_count=dirty_count,
                 error=err_msg,
-                message=f"Fetch failed: {err_msg}",
+                result=f"Fetch failed: {err_msg}",
             )
 
+        # Recheck status after fetch to get accurate ahead/behind
+        post_status, post_branch, post_ahead, post_behind, post_msg = self.get_local_status(path, org_name)
+
         if fetch_only:
-            # Recheck status after fetch
-            post_status, post_branch, post_ahead, post_behind, post_msg = self.get_local_status(path, org_name)
             duration = time.time() - start_time
             return SyncResult(
                 repo_name=repo.name,
-                status="FETCHED",
+                requested_action="FETCH",
+                performed_action="FETCHED",
                 before_status=status,
                 after_status=post_status,
                 duration=duration,
-                operation="sync",
-                message=f"Fetched remote changes. Post status: {post_status}.",
+                local_branch=post_branch,
+                ahead=post_ahead,
+                behind=post_behind,
+                dirty_file_count=dirty_count,
+                result=f"Fetched remote changes. Post status: {post_status}.",
             )
 
         # 3. Handle checkout default branch if required
@@ -265,18 +283,21 @@ class GitService:
             default_b = self.get_default_branch(path) or repo.default_branch
             if current_b != default_b:
                 # Check if we can checkout safely (is dirty?)
-                cp_dirty = self._run_git(path, ["status", "--porcelain"])
-                if cp_dirty.stdout.strip():
+                if dirty_count > 0:
                     duration = time.time() - start_time
                     return SyncResult(
                         repo_name=repo.name,
-                        status="BLOCKED",
+                        requested_action="SYNC",
+                        performed_action="BLOCKED",
                         before_status=status,
                         after_status=status,
                         duration=duration,
-                        operation="sync",
+                        local_branch=init_branch,
+                        ahead=ahead,
+                        behind=behind,
+                        dirty_file_count=dirty_count,
                         error="Local changes present. Checkout default branch blocked.",
-                        message="Checkout default branch blocked: repository is dirty.",
+                        result="Checkout default branch blocked: repository is dirty.",
                     )
                 cp_co = self._run_git(path, ["checkout", default_b])
                 if cp_co.returncode != 0:
@@ -284,13 +305,17 @@ class GitService:
                     err_msg = (cp_co.stderr or cp_co.stdout).strip()
                     return SyncResult(
                         repo_name=repo.name,
-                        status="FAILED",
+                        requested_action="SYNC",
+                        performed_action="FAILED",
                         before_status=status,
                         after_status=status,
                         duration=duration,
-                        operation="sync",
+                        local_branch=init_branch,
+                        ahead=ahead,
+                        behind=behind,
+                        dirty_file_count=dirty_count,
                         error=err_msg,
-                        message=f"Checkout {default_b} failed: {err_msg}",
+                        result=f"Checkout {default_b} failed: {err_msg}",
                     )
                 current_b = default_b
 
@@ -300,24 +325,32 @@ class GitService:
             duration = time.time() - start_time
             return SyncResult(
                 repo_name=repo.name,
-                status=status_mid,
+                requested_action="SYNC",
+                performed_action="SKIPPED",
                 before_status=status,
                 after_status=status_mid,
                 duration=duration,
-                operation="sync",
-                message=f"Skipping pull: repository is {status_mid}.",
+                local_branch=current_b,
+                ahead=ahead_mid,
+                behind=behind_mid,
+                dirty_file_count=dirty_count,
+                result=f"Skipping pull: repository is {status_mid}.",
             )
 
         if status_mid == "UP_TO_DATE":
             duration = time.time() - start_time
             return SyncResult(
                 repo_name=repo.name,
-                status="UP_TO_DATE",
+                requested_action="SYNC",
+                performed_action="NO_CHANGE",
                 before_status=status,
                 after_status="UP_TO_DATE",
                 duration=duration,
-                operation="sync",
-                message="Repository is already up to date.",
+                local_branch=current_b,
+                ahead=0,
+                behind=0,
+                dirty_file_count=dirty_count,
+                result="Repository was already up to date.",
             )
 
         # 5. Stashing if dirty
@@ -327,13 +360,17 @@ class GitService:
                 duration = time.time() - start_time
                 return SyncResult(
                     repo_name=repo.name,
-                    status="DIRTY",
+                    requested_action="SYNC",
+                    performed_action="BLOCKED",
                     before_status=status,
                     after_status="DIRTY",
                     duration=duration,
-                    operation="sync",
+                    local_branch=current_b,
+                    ahead=ahead_mid,
+                    behind=behind_mid,
+                    dirty_file_count=dirty_count,
                     error="Local changes exist and preserve changes is disabled",
-                    message="Sync skipped: repository is dirty and auto-stash is disabled.",
+                    result="Sync skipped: repository is dirty and auto-stash is disabled.",
                 )
 
             # Perform git stash push
@@ -343,13 +380,17 @@ class GitService:
                 err_msg = (cp_stash.stderr or cp_stash.stdout).strip()
                 return SyncResult(
                     repo_name=repo.name,
-                    status="FAILED",
+                    requested_action="SYNC",
+                    performed_action="FAILED",
                     before_status=status,
                     after_status="DIRTY",
                     duration=duration,
-                    operation="sync",
+                    local_branch=current_b,
+                    ahead=ahead_mid,
+                    behind=behind_mid,
+                    dirty_file_count=dirty_count,
                     error=err_msg,
-                    message=f"Autostash failed: {err_msg}",
+                    result=f"Autostash failed: {err_msg}",
                 )
             # Only count as stashed if changes were actually pushed
             stashed = "No local changes" not in cp_stash.stdout
@@ -373,35 +414,192 @@ class GitService:
         if pull_failed:
             return SyncResult(
                 repo_name=repo.name,
-                status="FAILED",
+                requested_action="SYNC",
+                performed_action="FAILED",
                 before_status=status,
                 after_status="DIRTY" if stashed else "FAILED",
                 duration=duration,
-                operation="sync",
+                local_branch=current_b,
+                ahead=ahead_mid,
+                behind=behind_mid,
+                dirty_file_count=dirty_count,
                 error=pull_err,
-                message=f"Pull fast-forward failed: {pull_err}",
+                result=f"Pull fast-forward failed: {pull_err}",
             )
 
         if pop_conflict:
+            conf_files = self.get_conflict_files(path)
             return SyncResult(
                 repo_name=repo.name,
-                status="CONFLICT",
+                requested_action="SYNC",
+                performed_action="CONFLICT",
                 before_status=status,
                 after_status="CONFLICT",
                 duration=duration,
-                operation="sync",
+                local_branch=current_b,
+                ahead=ahead_mid,
+                behind=behind_mid,
+                dirty_file_count=dirty_count,
+                conflict_files=conf_files,
                 error=pop_err,
-                message="Stash pop conflict. Resolve files manually, then run 'git stash drop' after verifying.",
+                result="Stash pop conflict. Resolve files manually, then run 'git stash drop' after verifying.",
             )
 
         # Recheck final status
-        final_status, _, _, _, _ = self.get_local_status(path, org_name)
+        final_status, _, final_ahead, final_behind, _ = self.get_local_status(path, org_name)
+        res_msg = "Successfully updated repository"
+        if stashed:
+            res_msg = (
+                "Remote branch was updated successfully. Local uncommitted changes were restored and remain present."
+            )
         return SyncResult(
             repo_name=repo.name,
-            status="UPDATED",
+            requested_action="SYNC",
+            performed_action="UPDATED",
             before_status=status,
             after_status=final_status,
             duration=duration,
-            operation="sync",
-            message="Successfully updated repository",
+            local_branch=current_b,
+            ahead=final_ahead,
+            behind=final_behind,
+            dirty_file_count=dirty_count,
+            result=res_msg,
         )
+
+    def get_dirty_files(self, path: Path) -> list[tuple[str, str]]:
+        try:
+            cp = self._run_git(path, ["status", "--porcelain"])
+            if cp.returncode != 0:
+                return []
+            files = []
+            for line in cp.stdout.splitlines():
+                if len(line) >= 4:
+                    status_code = line[:2]
+                    file_path = line[3:].strip().strip('"')
+                    files.append((status_code, file_path))
+            return files
+        except Exception:
+            return []
+
+    def get_conflict_files(self, path: Path) -> list[str]:
+        try:
+            cp = self._run_git(path, ["diff", "--name-only", "--diff-filter=U"])
+            if cp.returncode == 0:
+                return [line.strip() for line in cp.stdout.splitlines() if line.strip()]
+            return []
+        except Exception:
+            return []
+
+    def get_unpushed_commits(self, path: Path, branch: str, upstream: str) -> list[dict[str, str]]:
+        try:
+            cp = self._run_git(path, ["log", f"{upstream}..{branch}", "--format=%H|%an|%ad|%s"])
+            if cp.returncode != 0:
+                return []
+            commits = []
+            for line in cp.stdout.splitlines():
+                parts = line.split("|", 3)
+                if len(parts) >= 4:
+                    commits.append({"sha": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]})
+            return commits
+        except Exception:
+            return []
+
+    def get_diverged_commits(
+        self, path: Path, branch: str, upstream: str
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]], str]:
+        try:
+            local_commits = self.get_unpushed_commits(path, branch, upstream)
+            cp_remote = self._run_git(path, ["log", f"{branch}..{upstream}", "--format=%H|%an|%ad|%s"])
+            remote_commits = []
+            if cp_remote.returncode == 0:
+                for line in cp_remote.stdout.splitlines():
+                    parts = line.split("|", 3)
+                    if len(parts) >= 4:
+                        remote_commits.append(
+                            {"sha": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]}
+                        )
+            cp_base = self._run_git(path, ["merge-base", branch, upstream])
+            merge_base = cp_base.stdout.strip() if cp_base.returncode == 0 else ""
+            return local_commits, remote_commits, merge_base
+        except Exception:
+            return [], [], ""
+
+    def backup_repository(self, path: Path, org_name: str, repo_name: str) -> Path | None:
+        """Creates a zip backup of the repository directory (excluding .git) inside AppData/backups/."""
+        try:
+            from github_org_sync.services.report_service import ReportService
+
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup_root = ReportService.get_app_data_dir() / "backups" / timestamp / org_name / repo_name
+            backup_root.mkdir(parents=True, exist_ok=True)
+            zip_path = backup_root / "backup.zip"
+
+            import os
+            import zipfile
+
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for root, dirs, files in os.walk(path):
+                    if ".git" in dirs:
+                        dirs.remove(".git")
+                    for file in files:
+                        file_path = Path(root) / file
+                        arcname = file_path.relative_to(path)
+                        zf.write(file_path, arcname)
+            return zip_path
+        except Exception as e:
+            print(f"Backup failed: {e}")
+            return None
+
+    def discard_changes(self, path: Path) -> bool:
+        """Discards local changes via git reset --hard and git clean -fd."""
+        try:
+            cp_reset = self._run_git(path, ["reset", "--hard", "HEAD"])
+            cp_clean = self._run_git(path, ["clean", "-fd"])
+            return cp_reset.returncode == 0 and cp_clean.returncode == 0
+        except Exception:
+            return False
+
+    def push_commits(self, path: Path, branch: str) -> subprocess.CompletedProcess[str]:
+        """Pushes current branch to origin. Never uses force."""
+        return self._run_git(path, ["push", "origin", branch])
+
+    def merge_branch(self, path: Path, upstream: str) -> subprocess.CompletedProcess[str]:
+        """Merges remote upstream branch into local HEAD."""
+        return self._run_git(path, ["merge", upstream])
+
+    def rebase_branch(self, path: Path, upstream: str) -> subprocess.CompletedProcess[str]:
+        """Rebases current branch onto remote upstream branch."""
+        return self._run_git(path, ["rebase", upstream])
+
+    def abort_merge(self, path: Path) -> subprocess.CompletedProcess[str]:
+        return self._run_git(path, ["merge", "--abort"])
+
+    def abort_rebase(self, path: Path) -> subprocess.CompletedProcess[str]:
+        return self._run_git(path, ["rebase", "--abort"])
+
+    def create_branch(self, path: Path, branch_name: str) -> subprocess.CompletedProcess[str]:
+        return self._run_git(path, ["checkout", "-b", branch_name])
+
+    def set_upstream_branch(
+        self, path: Path, local_branch: str, remote_branch: str
+    ) -> subprocess.CompletedProcess[str]:
+        return self._run_git(path, ["branch", f"--set-upstream-to=origin/{remote_branch}", local_branch])
+
+    def push_set_upstream(self, path: Path, local_branch: str) -> subprocess.CompletedProcess[str]:
+        return self._run_git(path, ["push", "-u", "origin", local_branch])
+
+    def get_file_diff(self, path: Path, file_path: str) -> str:
+        """Runs git diff HEAD -- file_path to show both staged and unstaged changes."""
+        try:
+            cp = self._run_git(path, ["diff", "HEAD", "--", file_path])
+            return cp.stdout if cp.returncode == 0 else (cp.stderr or "")
+        except Exception as e:
+            return str(e)
+
+    def get_commit_show(self, path: Path, sha: str) -> str:
+        """Runs git show --stat sha to show commit statistics and patch details."""
+        try:
+            cp = self._run_git(path, ["show", "--stat", sha])
+            return cp.stdout if cp.returncode == 0 else (cp.stderr or "")
+        except Exception as e:
+            return str(e)

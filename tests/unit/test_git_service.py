@@ -133,8 +133,8 @@ def test_clone_success(mock_run: MagicMock, git_service: GitService) -> None:
 
     with patch("pathlib.Path.mkdir") as mock_mkdir:
         res = git_service.clone(repo, Path("/dummy/myrepo"), use_ssh=False, dry_run=False)
-        assert res.status == "CLONED"
-        assert res.operation == "clone"
+        assert res.performed_action == "CLONED"
+        assert res.requested_action == "CLONE"
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
         dest_path_str = str(Path("/dummy/myrepo"))
         mock_run.assert_called_once_with(None, ["clone", "https://github.com/org/myrepo", dest_path_str])
@@ -156,21 +156,24 @@ def test_sync_success_clean(mock_run: MagicMock, mock_get_status: MagicMock, git
     mock_get_status.side_effect = [
         ("BEHIND", "main", 0, 1, None),
         ("BEHIND", "main", 0, 1, None),
+        ("BEHIND", "main", 0, 1, None),
         ("UP_TO_DATE", "main", 0, 0, None),
     ]
 
-    # 1. Fetch prune
+    # 1. Dirty check
+    cp_dirty = MagicMock(returncode=0, stdout="")
+    # 2. Fetch prune
     cp_fetch = MagicMock(returncode=0)
-    # 2. Pull ff-only
+    # 3. Pull ff-only
     cp_pull = MagicMock(returncode=0)
-    mock_run.side_effect = [cp_fetch, cp_pull]
+    mock_run.side_effect = [cp_dirty, cp_fetch, cp_pull]
 
     with patch("pathlib.Path.exists") as mock_exists:
         mock_exists.return_value = True
         res = git_service.sync(
             repo, "org", preserve_local_changes=True, fetch_only=False, checkout_default=False, dry_run=False
         )
-        assert res.status == "UPDATED"
+        assert res.performed_action == "UPDATED"
         assert res.before_status == "BEHIND"
         assert res.after_status == "UP_TO_DATE"
 

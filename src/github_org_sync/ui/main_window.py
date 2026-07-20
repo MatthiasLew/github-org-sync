@@ -8,6 +8,7 @@ from typing import Any
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -29,6 +30,7 @@ from github_org_sync.config import ConfigManager
 from github_org_sync.i18n import _t, translator
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
+from github_org_sync.services.git_service import GitService
 from github_org_sync.services.github_service import GitHubService, GitHubServiceError
 from github_org_sync.services.report_service import ReportService
 from github_org_sync.services.validation_service import ValidationService
@@ -43,14 +45,33 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setObjectName("MainWindow")
 
+        # Set taskbar app ID for Windows grouping
+        if sys.platform == "win32":
+            import ctypes
+
+            with contextlib.suppress(Exception):
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("github-org-sync.v1")
+
         self.config_manager = ConfigManager()
         self.config = self.config_manager.load()
+
+        # Set window icon
+        from PySide6.QtGui import QIcon
+
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            assets_dir = Path(sys._MEIPASS) / "assets"
+        else:
+            assets_dir = Path(__file__).resolve().parent.parent.parent.parent / "assets"
+        logo_png = assets_dir / "logo-256.png"
+        if logo_png.exists():
+            self.setWindowIcon(QIcon(str(logo_png)))
 
         # Set default language from config
         lang = self.config.get("language", "pl")
         translator.set_language(lang)
 
         self.github_service = GitHubService()
+        self.git_service = GitService()
         self.gh_cli_available = False
         self.repositories: list[Repository] = []
         self.sync_worker: SyncWorker | None = None
@@ -154,6 +175,8 @@ class MainWindow(QMainWindow):
         self.cb_preserve_changes = QCheckBox(self)
         self.cb_fetch_only = QCheckBox(self)
         self.cb_dry_run = QCheckBox(self)
+        self.cb_follow = QCheckBox(self)
+        self.cb_follow.toggled.connect(self._on_follow_toggled)
 
         options_layout.addWidget(self.cb_include_archived)
         options_layout.addWidget(self.cb_include_forks)
@@ -161,6 +184,7 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self.cb_preserve_changes)
         options_layout.addWidget(self.cb_fetch_only)
         options_layout.addWidget(self.cb_dry_run)
+        options_layout.addWidget(self.cb_follow)
         options_layout.addStretch()
 
         main_layout.addWidget(options_widget)
@@ -233,6 +257,11 @@ class MainWindow(QMainWindow):
         self.btn_sync.setObjectName("btnAction")
         self.btn_sync.clicked.connect(self.sync_selected)
         ops_layout.addWidget(self.btn_sync)
+
+        self.btn_wizard = QPushButton(self)
+        self.btn_wizard.setObjectName("btnOutline")
+        self.btn_wizard.clicked.connect(self.run_workspace_wizard)
+        ops_layout.addWidget(self.btn_wizard)
 
         self.btn_cancel = QPushButton(self)
         self.btn_cancel.setObjectName("btnCancel")
@@ -374,6 +403,7 @@ class MainWindow(QMainWindow):
         self.cb_fetch_only.setToolTip(_t("tip_fetch_only"))
         self.cb_dry_run.setText(_t("label_dry_run"))
         self.cb_dry_run.setToolTip(_t("tip_dry_run"))
+        self.cb_follow.setText(_t("chk_follow"))
 
         # Selection Control Row
         self.btn_sel_all.setText(_t("btn_sel_all"))
@@ -393,6 +423,8 @@ class MainWindow(QMainWindow):
         # Operations Buttons Row
         self.btn_sync.setText(_t("btn_sync"))
         self.btn_sync.setToolTip(_t("tip_sync_btn"))
+        self.btn_wizard.setText(_t("btn_check_update_workspace"))
+        self.btn_wizard.setToolTip(_t("btn_check_update_workspace"))
         self.btn_cancel.setText(_t("btn_cancel"))
         self.btn_cancel.setToolTip(_t("tip_cancel_btn"))
         self.btn_open_report.setText(_t("btn_open_report"))
@@ -480,6 +512,7 @@ class MainWindow(QMainWindow):
         self.cb_preserve_changes.setChecked(self.config.get("preserve_local_changes", True))
         self.cb_fetch_only.setChecked(self.config.get("fetch_only", False))
         self.cb_dry_run.setChecked(self.config.get("dry_run", False))
+        self.cb_follow.setChecked(self.config.get("follow_active_repo", False))
 
         width = self.config.get("window_width", 1000)
         height = self.config.get("window_height", 700)
@@ -517,6 +550,7 @@ class MainWindow(QMainWindow):
         self.config["preserve_local_changes"] = self.cb_preserve_changes.isChecked()
         self.config["fetch_only"] = self.cb_fetch_only.isChecked()
         self.config["dry_run"] = self.cb_dry_run.isChecked()
+        self.config["follow_active_repo"] = self.cb_follow.isChecked()
 
         # Window size & position
         self.config["window_width"] = self.width()
@@ -580,7 +614,7 @@ class MainWindow(QMainWindow):
                 repo.branch = None
                 repo.ahead = None
                 repo.behind = None
-                repo.action = None
+                repo.requested_action = None
                 repo.result = None
 
             # Reset table and filters
@@ -1000,3 +1034,70 @@ class MainWindow(QMainWindow):
         is_org_valid = self._is_org_valid()
         is_gh_cli_available = getattr(self, "gh_cli_available", True)
         self.btn_load.setEnabled(is_idle and is_org_valid and is_gh_cli_available)
+
+    def _on_follow_toggled(self, checked: bool) -> None:
+        self.table.follow_active_repo = checked
+
+    def run_workspace_wizard(self) -> None:
+        from github_org_sync.ui.dialogs import WorkspaceWizardDialog
+
+        ws_text = self.workspace_input.text().strip()
+        if not ws_text or not Path(ws_text).exists():
+            QMessageBox.warning(self, _t("error_open_title"), "Please choose a valid workspace folder first.")
+            return
+
+        org_name = ValidationService.normalize_org_name(self.org_input.text().strip())
+        if not org_name:
+            QMessageBox.warning(self, _t("error_open_title"), "Please provide a valid GitHub organization name first.")
+            return
+
+        if not self.repositories:
+            QMessageBox.warning(self, _t("error_open_title"), "No repositories loaded. Please load repositories first.")
+            return
+
+        # Disable main window state to prevent concurrency
+        self._set_app_state("SYNCING")
+        QApplication.processEvents()
+
+        try:
+            dialog = WorkspaceWizardDialog(
+                repositories=self.repositories,
+                workspace=Path(ws_text),
+                org_name=org_name,
+                git_service=self.git_service,
+                parent=self,
+            )
+            dialog.exec()
+
+            # Update table in place and apply filters
+            self.table.update_repositories_in_place(self.repositories)
+            self.apply_table_filters()
+
+            if dialog.results:
+                self.log("Wizard completed. Saving update report...")
+                from github_org_sync.services.report_service import ReportService
+
+                options = {
+                    "use_ssh": self.cb_use_ssh.isChecked(),
+                    "preserve_local_changes": self.cb_preserve_changes.isChecked(),
+                    "fetch_only": self.cb_fetch_only.isChecked(),
+                    "dry_run": self.cb_dry_run.isChecked(),
+                    "checkout_default": True,
+                    "wizard_run": True,
+                }
+                json_path, md_path = ReportService.generate_reports(
+                    organization=org_name,
+                    workspace=Path(ws_text),
+                    auth_user=self.auth_user,
+                    protocol="ssh" if self.cb_use_ssh.isChecked() else "https",
+                    options=options,
+                    results=dialog.results,
+                )
+                self.last_json_report = json_path
+                self.last_md_report = md_path
+                self.btn_open_report.setEnabled(True)
+                self.log(f"Report JSON: {json_path}")
+                self.log(f"Report MD: {md_path}")
+
+        finally:
+            self._set_app_state("IDLE")

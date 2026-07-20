@@ -61,7 +61,7 @@ def test_git_scenario_a_and_b(tmp_path):
 
     # Clone
     res = git_service.clone(repo_model, dest_path, use_ssh=False, dry_run=False)
-    assert res.status == "CLONED"
+    assert res.performed_action == "CLONED"
     assert (dest_path / "file.txt").read_text() == "Hello A"
 
     # Set user details on cloned repo
@@ -117,7 +117,7 @@ def test_git_scenario_c_behind(tmp_path):
     # Sync
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name)
-    assert res.status == "UPDATED"
+    assert res.performed_action == "UPDATED"
     assert (dest_path / "file.txt").read_text() == "Hello C modified"
 
 
@@ -156,7 +156,7 @@ def test_git_scenario_d_ahead(tmp_path):
     # Sync should keep local changes and report AHEAD without errors
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name)
-    assert res.status == "AHEAD"
+    assert res.after_status == "AHEAD"
     assert (dest_path / "file.txt").read_text() == "Hello D ahead"
 
 
@@ -205,7 +205,7 @@ def test_git_scenario_e_diverged(tmp_path):
     # Sync diverged
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name)
-    assert res.status == "DIVERGED"
+    assert res.after_status == "DIVERGED"
 
 
 # Scenario F
@@ -245,7 +245,7 @@ def test_git_scenario_f_dirty_autostash(tmp_path):
     # Sync with autostash enabled
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name, preserve_local_changes=True)
-    assert res.status == "UPDATED"
+    assert res.performed_action == "UPDATED"
 
     # Remote file pulled successfully
     assert (dest_path / "new_file.txt").read_text() == "Hello F remote"
@@ -290,9 +290,9 @@ def test_git_scenario_g_stash_conflict(tmp_path):
     # Sync should fail with CONFLICT
     repo_model.local_path = dest_path
     res = git_service.sync(repo_model, org_name, preserve_local_changes=True)
-    assert res.status == "CONFLICT"
-    assert res.message is not None
-    assert "conflict" in res.message.lower()
+    assert res.after_status == "CONFLICT"
+    assert res.result is not None
+    assert "conflict" in res.result.lower()
 
 
 # Scenario H
@@ -391,7 +391,7 @@ def test_git_scenario_l_unicode_and_spaces(tmp_path):
     repo_model = Repository("repo_l", str(remote_path), f"git@github.com:{org_name}/repo_l.git")
 
     res = git_service.clone(repo_model, unicode_dest, use_ssh=False, dry_run=False)
-    assert res.status == "CLONED"
+    assert res.performed_action == "CLONED"
     assert (unicode_dest / "file.txt").exists()
     assert (unicode_dest / "file.txt").read_text() == "Hello L"
 

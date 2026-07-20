@@ -18,5 +18,6 @@ class Repository:
     branch: str | None = None
     ahead: int | None = None
     behind: int | None = None
-    action: str | None = None
+    requested_action: str | None = None
+    performed_action: str | None = None
     result: str | None = None

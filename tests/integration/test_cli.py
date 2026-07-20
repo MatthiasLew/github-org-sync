@@ -28,7 +28,15 @@ def mock_cli_services() -> Generator[tuple[MagicMock, MagicMock, MagicMock], Non
         mock_sync.filter_repositories.side_effect = lambda repos, *args, **kwargs: repos
         mock_sync.check_local_statuses.side_effect = lambda repos, *args, **kwargs: repos
         mock_sync.sync_repositories.return_value = [
-            SyncResult("repo-1", "CLONED", "MISSING", "UP_TO_DATE", 1.0, "clone", message="Cloned")
+            SyncResult(
+                repo_name="repo-1",
+                requested_action="CLONE",
+                performed_action="CLONED",
+                before_status="MISSING",
+                after_status="UP_TO_DATE",
+                duration=1.0,
+                result="Cloned",
+            )
         ]
 
         mock_report = mock_report_cls
@@ -69,4 +77,4 @@ def test_cli_version(capsys: Any) -> None:
     captured = capsys.readouterr()
     # Argparse may output to stdout or stderr depending on Python versions/environments
     output = captured.out or captured.err
-    assert "github-org-sync 1.1.0" in output
+    assert "github-org-sync 1.2.0" in output

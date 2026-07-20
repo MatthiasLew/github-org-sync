@@ -57,6 +57,8 @@ class SyncService:
             repo.branch = branch
             repo.ahead = ahead
             repo.behind = behind
+            repo.requested_action = None
+            repo.performed_action = None
             repo.result = msg
 
         return repositories
@@ -88,12 +90,12 @@ class SyncService:
                 for remaining_repo in repositories[idx:]:
                     res = SyncResult(
                         repo_name=remaining_repo.name,
-                        status="CANCELLED",
+                        requested_action="FETCH" if fetch_only else "SYNC",
+                        performed_action="CANCELLED",
                         before_status=remaining_repo.status,
                         after_status=remaining_repo.status,
                         duration=0.0,
-                        operation="sync",
-                        message="Sync cancelled by user.",
+                        result="Sync cancelled by user.",
                     )
                     results.append(res)
                     if progress_callback:
@@ -111,12 +113,12 @@ class SyncService:
                 # Non-updatable states, skip
                 res = SyncResult(
                     repo_name=repo.name,
-                    status=before_status,
+                    requested_action="FETCH" if fetch_only else "SYNC",
+                    performed_action="SKIPPED",
                     before_status=before_status,
                     after_status=before_status,
                     duration=0.0,
-                    operation="skip",
-                    message=f"Skipped due to status: {before_status}",
+                    result=f"Skipped due to status: {before_status}",
                 )
             else:
                 # Sync / Update
@@ -130,8 +132,16 @@ class SyncService:
                 )
 
             # Update repository state in-place based on sync results
-            repo.status = res.status
-            repo.result = res.message or res.error
+            repo.status = res.after_status
+            repo.result = res.result or res.error
+            repo.requested_action = res.requested_action
+            repo.performed_action = res.performed_action
+            if res.local_branch:
+                repo.branch = res.local_branch
+            if res.ahead is not None:
+                repo.ahead = res.ahead
+            if res.behind is not None:
+                repo.behind = res.behind
             results.append(res)
 
             if progress_callback:

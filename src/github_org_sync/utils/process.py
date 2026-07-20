@@ -36,3 +36,39 @@ def popen_process(args: list[str], cwd: Path | str | None = None, **kwargs: Any)
         kwargs["creationflags"] = flags
 
     return subprocess.Popen(args, cwd=cwd, text=True, **kwargs)
+
+
+def open_terminal(path: Path) -> bool:
+    """
+    Opens a visible OS terminal in the specified directory.
+    This is an interactive action initiated by the user, so the terminal is visible.
+    """
+    import shutil
+
+    try:
+        if sys.platform == "win32":
+            # Prefer Windows Terminal if available
+            wt_path = shutil.which("wt")
+            if wt_path:
+                subprocess.Popen([wt_path, "-d", str(path)])
+                return True
+            # Fallback to PowerShell
+            powershell_path = shutil.which("powershell")
+            if powershell_path:
+                # To open a new visible PowerShell window on Windows, we start it via cmd's start
+                subprocess.Popen(["cmd.exe", "/c", "start", "powershell.exe"], cwd=path)
+                return True
+            return False
+        elif sys.platform == "darwin":  # noqa: RET505
+            subprocess.Popen(["open", "-a", "Terminal", str(path)])
+            return True
+        else:  # noqa: RET505
+            # Linux: try common terminal emulators
+            for term in ("gnome-terminal", "konsole", "xfce4-terminal", "xterm"):
+                term_path = shutil.which(term)
+                if term_path:
+                    subprocess.Popen([term_path], cwd=path)
+                    return True
+            return False
+    except Exception:
+        return False

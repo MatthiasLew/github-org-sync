@@ -70,11 +70,11 @@ class ReportService:
             "results": [
                 {
                     "repository": r.repo_name,
-                    "operation": r.operation,
+                    "operation": r.performed_action,
                     "before_status": r.before_status,
                     "after_status": r.after_status,
                     "duration": round(r.duration, 3),
-                    "result": r.message or "",
+                    "result": r.result or "",
                     "error": r.error or "",
                 }
                 for r in results
@@ -112,17 +112,17 @@ class ReportService:
 
         for r in results:
             status_symbol = "✅"
-            if r.status in ("FAILED", "CONFLICT"):
+            if r.after_status in ("FAILED", "CONFLICT"):
                 status_symbol = "❌"
-            elif r.status in ("WRONG_REMOTE", "BLOCKED", "DIRTY", "DIVERGED"):
+            elif r.after_status in ("WRONG_REMOTE", "BLOCKED", "DIRTY", "DIVERGED"):
                 status_symbol = "⚠️"
 
-            res_msg = r.message or ""
+            res_msg = r.result or ""
             if r.error:
                 res_msg += f" (Error: {r.error})"
 
             md_lines.append(
-                f"| {r.repo_name} | {r.operation} | {r.before_status} | {status_symbol} {r.after_status} | {r.duration:.2f} | {res_msg} |"
+                f"| {r.repo_name} | {r.performed_action} | {r.before_status} | {status_symbol} {r.after_status} | {r.duration:.2f} | {res_msg} |"
             )
 
         md_content = "\n".join(md_lines)

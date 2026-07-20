@@ -7,7 +7,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
+    QDialog,
     QHBoxLayout,
     QHeaderView,
     QMenu,
@@ -64,6 +66,7 @@ class RepositoryTable(QTableWidget):
         super().__init__(parent)
         self.repositories: list[Repository] = []
         self.checkbox_map: dict[str, QCheckBox] = {}
+        self.follow_active_repo: bool = False
 
         self.setColumnCount(len(self.COLUMNS))
         self.retranslate_ui()
@@ -157,6 +160,7 @@ class RepositoryTable(QTableWidget):
 
             # Column 1: Repository Name
             name_item = QTableWidgetItem(repo.name)
+            name_item.setToolTip(repo.name)
             self.setItem(idx, 1, name_item)
 
             # Column 2: Visibility
@@ -169,11 +173,14 @@ class RepositoryTable(QTableWidget):
             # Column 4: Local Status
             status_item = QTableWidgetItem(_t(f"state_{repo.status}"))
             self._style_status_item(status_item, repo.status)
+            status_item.setToolTip(status_item.text())
             self.setItem(idx, 4, status_item)
 
             # Column 5: Branch
             branch_val = repo.branch or ""
-            self.setItem(idx, 5, QTableWidgetItem(branch_val))
+            branch_item = QTableWidgetItem(branch_val)
+            branch_item.setToolTip(branch_val)
+            self.setItem(idx, 5, branch_item)
 
             # Column 6: Ahead
             ahead_val = str(repo.ahead) if repo.ahead is not None else ""
@@ -185,23 +192,43 @@ class RepositoryTable(QTableWidget):
 
             # Column 8: Action
             action_text = self._determine_action(repo)
-            self.setItem(idx, 8, QTableWidgetItem(action_text))
+            action_item = QTableWidgetItem(action_text)
+            action_item.setToolTip(action_text)
+            self.setItem(idx, 8, action_item)
 
             # Column 9: Result / Message
             if repo.status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
                 res_val = _t(f"desc_{repo.status}")
             else:
                 res_val = repo.result or ""
-            self.setItem(idx, 9, QTableWidgetItem(res_val))
+            res_item = QTableWidgetItem(res_val)
+            res_item.setToolTip(res_val)
+            self.setItem(idx, 9, res_item)
 
         self.setSortingEnabled(True)
 
     def update_repository_status(self, repo_name: str, status: str, message: str | None = None) -> None:
         """Dynamically updates a repository row's status, action, and result."""
-        # Temporal disable sorting while modifying rows
+        # Save selection, scrollbars, focus, sorting
+        v_val = self.verticalScrollBar().value()
+        h_val = self.horizontalScrollBar().value()
+
+        selected_names = []
+        for r in range(self.rowCount()):
+            name_item = self.item(r, 1)
+            if name_item and name_item.isSelected():
+                selected_names.append(name_item.text())
+
+        curr_row = self.currentRow()
+        curr_col = self.currentColumn()
+
+        header = self.horizontalHeader()
+        sort_col = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
         sorting_was_enabled = self.isSortingEnabled()
         self.setSortingEnabled(False)
 
+        # Perform single update
         for row in range(self.rowCount()):
             name_item = self.item(row, 1)
             if name_item and name_item.text() == repo_name:
@@ -216,33 +243,145 @@ class RepositoryTable(QTableWidget):
                         if status_item:
                             status_item.setText(_t(f"state_{status}"))
                             self._style_status_item(status_item, status)
+                            status_item.setToolTip(status_item.text())
 
                         # Update action item
                         action_item = self.item(row, 8)
                         if action_item:
-                            action_item.setText(self._determine_action(repo))
+                            action_text = self._determine_action(repo)
+                            action_item.setText(action_text)
+                            action_item.setToolTip(action_text)
 
                         # Update result item
                         res_item = self.item(row, 9)
                         if res_item and message is not None:
                             if status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
-                                res_item.setText(_t(f"desc_{status}"))
+                                res_val = _t(f"desc_{status}")
                             else:
-                                res_item.setText(message)
+                                res_val = message
+                            res_item.setText(res_val)
+                            res_item.setToolTip(res_val)
 
                         # Update branch/ahead/behind from repo state
                         branch_item = self.item(row, 5)
                         if branch_item:
                             branch_item.setText(repo.branch or "")
+                            branch_item.setToolTip(repo.branch or "")
                         ahead_item = self.item(row, 6)
                         if ahead_item:
                             ahead_item.setText(str(repo.ahead) if repo.ahead is not None else "")
                         behind_item = self.item(row, 7)
                         if behind_item:
                             behind_item.setText(str(repo.behind) if repo.behind is not None else "")
+
+                        # Handle Follow Mode
+                        if getattr(self, "follow_active_repo", False):
+                            self.scrollToItem(name_item, QAbstractItemView.ScrollHint.PositionAtCenter)
                         break
 
-        self.setSortingEnabled(sorting_was_enabled)
+        if sorting_was_enabled:
+            self.setSortingEnabled(True)
+            self.sortByColumn(sort_col, sort_order)
+
+        self.clearSelection()
+        for r in range(self.rowCount()):
+            name_item = self.item(r, 1)
+            if name_item and name_item.text() in selected_names:
+                self.selectRow(r)
+
+        if curr_row >= 0 and curr_row < self.rowCount():
+            self.setCurrentCell(curr_row, curr_col)
+
+        # Restore scrollbars if not follow mode or follow mode didn't trigger
+        if not getattr(self, "follow_active_repo", False):
+            self.verticalScrollBar().setValue(v_val)
+        self.horizontalScrollBar().setValue(h_val)
+
+    def update_repositories_in_place(self, repos: list[Repository]) -> None:
+        """Updates the table cells in place based on repository name matching to preserve selections, scrollbars, etc."""
+        v_val = self.verticalScrollBar().value()
+        h_val = self.horizontalScrollBar().value()
+
+        selected_names = []
+        for r in range(self.rowCount()):
+            name_item = self.item(r, 1)
+            if name_item and name_item.isSelected():
+                selected_names.append(name_item.text())
+
+        curr_row = self.currentRow()
+        curr_col = self.currentColumn()
+
+        header = self.horizontalHeader()
+        sort_col = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
+        sorting_was_enabled = self.isSortingEnabled()
+        self.setSortingEnabled(False)
+
+        self.repositories = repos
+        for repo in repos:
+            found_row = -1
+            for r in range(self.rowCount()):
+                name_item = self.item(r, 1)
+                if name_item and name_item.text() == repo.name:
+                    found_row = r
+                    break
+
+            if found_row != -1:
+                # Update cells
+                self.setItem(found_row, 2, QTableWidgetItem(repo.visibility.upper()))
+
+                arch_text = _t("yes_word") if repo.is_archived else _t("no_word")
+                self.setItem(found_row, 3, QTableWidgetItem(arch_text))
+
+                status_item = self.item(found_row, 4)
+                if status_item:
+                    status_item.setText(_t(f"state_{repo.status}"))
+                    self._style_status_item(status_item, repo.status)
+                    status_item.setToolTip(status_item.text())
+
+                branch_item = self.item(found_row, 5)
+                if branch_item:
+                    branch_item.setText(repo.branch or "")
+                    branch_item.setToolTip(repo.branch or "")
+
+                ahead_item = self.item(found_row, 6)
+                if ahead_item:
+                    ahead_item.setText(str(repo.ahead) if repo.ahead is not None else "")
+
+                behind_item = self.item(found_row, 7)
+                if behind_item:
+                    behind_item.setText(str(repo.behind) if repo.behind is not None else "")
+
+                action_item = self.item(found_row, 8)
+                if action_item:
+                    action_text = self._determine_action(repo)
+                    action_item.setText(action_text)
+                    action_item.setToolTip(action_text)
+
+                res_item = self.item(found_row, 9)
+                if res_item:
+                    if repo.status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
+                        res_val = _t(f"desc_{repo.status}")
+                    else:
+                        res_val = repo.result or ""
+                    res_item.setText(res_val)
+                    res_item.setToolTip(res_val)
+
+        if sorting_was_enabled:
+            self.setSortingEnabled(True)
+            self.sortByColumn(sort_col, sort_order)
+
+        self.clearSelection()
+        for r in range(self.rowCount()):
+            name_item = self.item(r, 1)
+            if name_item and name_item.text() in selected_names:
+                self.selectRow(r)
+
+        if curr_row >= 0 and curr_row < self.rowCount():
+            self.setCurrentCell(curr_row, curr_col)
+
+        self.verticalScrollBar().setValue(v_val)
+        self.horizontalScrollBar().setValue(h_val)
 
     def get_selected_repositories(self) -> list[Repository]:
         """Returns the list of repositories that have their checkbox checked."""
@@ -320,6 +459,21 @@ class RepositoryTable(QTableWidget):
 
         menu = QMenu(self)
 
+        # Context action 0: Copy cell
+        act_copy_cell = QAction(_t("ctx_copy_log"), self)
+        act_copy_cell.triggered.connect(lambda: self._copy_cell(row, item.column()))
+        menu.addAction(act_copy_cell)
+
+        # Context action 0.5: Copy row
+        act_copy_row = QAction(_t("ctx_copy_log") + " (row)", self)  # We can customize this label
+        act_copy_row.setText("Copy row") if sys.platform != "win32" or _t(
+            "yes_word"
+        ) == "Yes" else act_copy_row.setText("Kopiuj wiersz")
+        act_copy_row.triggered.connect(lambda: self._copy_row(row))
+        menu.addAction(act_copy_row)
+
+        menu.addSeparator()
+
         # Context action 1: Open local directory
         act_open_folder = QAction(_t("ctx_open_folder"), self)
         act_open_folder.setEnabled(repo.local_path is not None and repo.local_path.exists())
@@ -332,7 +486,70 @@ class RepositoryTable(QTableWidget):
         act_open_github.triggered.connect(lambda: self._open_url(repo.url))
         menu.addAction(act_open_github)
 
+        menu.addSeparator()
+
+        # Context action 3: Compare Changes
+        act_compare = QAction(_t("ctx_compare_changes"), self)
+        act_compare.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_compare.triggered.connect(lambda: self._compare_changes(repo))
+        menu.addAction(act_compare)
+
+        # Context action 4: Resolve Issue
+        act_resolve = QAction(_t("ctx_resolve_issue"), self)
+        act_resolve.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_resolve.triggered.connect(lambda: self._resolve_issue(repo))
+        menu.addAction(act_resolve)
+
         menu.exec(self.viewport().mapToGlobal(pos))
+
+    def _copy_cell(self, row: int, col: int) -> None:
+        cell_item = self.item(row, col)
+        text = cell_item.text() if cell_item else ""
+        QApplication.clipboard().setText(text)
+
+    def _copy_row(self, row: int) -> None:
+        row_texts = []
+        for col in range(self.columnCount()):
+            cell_item = self.item(row, col)
+            if cell_item:
+                row_texts.append(cell_item.text())
+            else:
+                row_texts.append("")
+        QApplication.clipboard().setText("\t".join(row_texts))
+
+    def _compare_changes(self, repo: Repository) -> None:
+        from github_org_sync.ui.dialogs import CompareChangesDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        org_text = main_win.org_input.text().strip() if hasattr(main_win, "org_input") else ""
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        dialog = CompareChangesDialog(repo, git_service, org_text, self)
+        dialog.exec()
+
+    def _resolve_issue(self, repo: Repository) -> None:
+        from github_org_sync.ui.dialogs import ResolveIssueDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        org_text = main_win.org_input.text().strip() if hasattr(main_win, "org_input") else ""
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        if repo.local_path is None:
+            return
+        dialog = ResolveIssueDialog(repo, git_service, org_text, self)
+        res = dialog.exec()
+        if res == QDialog.DialogCode.Accepted:
+            # Refresh local status of this repo and update in table
+            status, branch, ahead, behind, msg = git_service.get_local_status(repo.local_path, org_text)
+            self.update_repository_status(repo.name, status, msg)
+            if hasattr(main_win, "log"):
+                main_win.log(f"Repository {repo.name} resolved. Status is now: {status}.")
 
     def _open_folder(self, path: Path) -> None:
         try:
