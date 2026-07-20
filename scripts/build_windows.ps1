@@ -17,7 +17,7 @@ if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 # --noconfirm: Overwrite existing output directory without prompting
 # --windowed: Do not open a console window when the executable starts (GUI mode)
 # --name: Specify name of the executable
-python -m PyInstaller --noconfirm --onedir --windowed --name="github-org-sync" src/github_org_sync/__main__.py
+python -m PyInstaller --noconfirm github-org-sync.spec
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build completed successfully!" -ForegroundColor Green
