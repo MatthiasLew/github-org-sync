@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-20
+
+### Added
+- Application visual logo (SVG design, generated PNG icons, and Windows executable application icon).
+- Interactive Git Sync Wizard: guides the user through resolving non-trivial repository states (DIRTY, AHEAD, BEHIND, DIVERGED) step-by-step.
+- Resolution actions per state: create backup branches, stash & pull, force push (with manual override), soft discard changes, fast-forward pull, and merge conflict checks.
+- Comprehensive sync result summary displaying counts for skipped, conflict, failed, updated, and resolved repositories.
+- Custom context menu action to trigger the resolution dialog for a specific repository.
+- Double-click table row action to automatically open the resolve issue dialog.
+- Detailed synchronization reporting with granular, machine-readable sync action statuses (`requested_action`, `performed_action`, `before_status`, `after_status`).
+
+### Fixed
+- Fixed unhandled lambda signals on application close by cleaning up worker connections.
+- Mypy type annotation issues and platform-specific code structure paths.
+
 ## [1.1.0] - 2026-07-20
 
 ### Added

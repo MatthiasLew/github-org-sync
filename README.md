@@ -4,28 +4,19 @@
 
 ![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
-## New in Version 1.1.0
-- **Multi-language Interface**: Switch between **Polski** and **English** in real-time under `Settings -> Language` (or `Ustawienia -> Język`). Language choices are persisted.
-- **Theme Selection**: Choose between **System**, **Light**, or **Dark** themes under `Settings -> Theme` (or `Ustawienia -> Motyw`). System theme matches OS settings automatically.
-- **Context Menus**: Right-click any repository row to open its local folder or view its homepage on GitHub. Copy console messages to your clipboard with a right-click on the log panel.
-- **Improved Workspace Lifecycle**: Invalidate local status instantly when changing workspace paths, stopping background workers safely to avoid race conditions.
-- **Table Search & Status Filters**: Filter by repository name or status (Missing, Up to date, Local changes, Behind, Ahead, Diverged, Errors).
-- **Column Sorting & Width Persistence**: Sort columns by clicking headers. Custom column widths, window size, and positions are remembered.
-- **Silent execution on Windows**: All Git and GitHub CLI subprocesses are executed without flashing command prompt windows (`CREATE_NO_WINDOW`).
-- **Data Validation & Pre-Sync Summaries**: Validates organization inputs and workspace folders, displaying a settings summary dialog before starting synchronization.
-- **Shortcuts support**:
-  - `Ctrl+L` - Load repositories
-  - `Ctrl+R` - Refresh status
-  - `Ctrl+Shift+S` - Sync selected
-  - `Ctrl+F` - Focus search input
-  - `F1` - Getting Started Guide
-- **Getting Started Guide & About Dialog**: Instantly accessible guides available under the `Help` menu.
+## New in Version 1.2.0
+- **Interactive Git Sync Wizard**: Guides you step-by-step through resolving non-trivial repository states (DIRTY, AHEAD, BEHIND, DIVERGED).
+- **Comprehensive Conflict Resolution**: Choose to stash & pull, force push, create backup branches, soft discard local edits, fast-forward pull, or do deep merges directly from dialog interfaces.
+- **Double-Click Resolution Dialog**: Double-click any repository row or select "Resolve Issue" from the custom context menu to invoke the Git Resolve dialog.
+- **Application Logo**: Beautiful vector SVG logo, generated multi-size icons, and embedded executable application icon.
+- **Summary Count Report**: Shows sync success, failure, updated, conflict, and skipped totals.
+- **Detailed Sync Statusing**: Richer status information in synchronization report files (`requested_action`, `performed_action`, `before_status`, `after_status`).
 
 ## Windows Release Installation
 
 To run the application on Windows without installing Python:
 
-1. Download the release package (`github-org-sync-v1.1.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
+1. Download the release package (`github-org-sync-v1.2.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
 2. Extract the complete archive to a directory of your choice.
 3. Run `github-org-sync.exe` inside the extracted folder.
 
