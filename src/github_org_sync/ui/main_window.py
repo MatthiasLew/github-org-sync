@@ -1,10 +1,11 @@
+import contextlib
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -50,10 +51,16 @@ class MainWindow(QMainWindow):
         translator.set_language(lang)
 
         self.github_service = GitHubService()
+        self.gh_cli_available = False
         self.repositories: list[Repository] = []
         self.sync_worker: SyncWorker | None = None
         self.auth_user = "unknown"
         self.app_state = "IDLE"
+
+        # Debounce timer for org input
+        self.org_debounce_timer = QTimer(self)
+        self.org_debounce_timer.setSingleShot(True)
+        self.org_debounce_timer.timeout.connect(self._on_org_debounce_timeout)
 
         # Reports tracker
         self.last_json_report: Path | None = None
@@ -106,6 +113,7 @@ class MainWindow(QMainWindow):
         self.label_org = QLabel(self)
         grid_layout.addWidget(self.label_org, 0, 0)
         self.org_input = QLineEdit(self)
+        self.org_input.textChanged.connect(self._on_org_text_changed)
         grid_layout.addWidget(self.org_input, 0, 1)
 
         load_btn_layout = QHBoxLayout()
@@ -361,7 +369,7 @@ class MainWindow(QMainWindow):
         self.cb_use_ssh.setText(_t("label_use_ssh"))
         self.cb_use_ssh.setToolTip(_t("tip_use_ssh"))
         self.cb_preserve_changes.setText(_t("label_preserve_changes"))
-        self.cb_preserve_changes.setToolTip(_t("tip_stash"))
+        self.cb_preserve_changes.setToolTip(_t("tip_preserve_changes"))
         self.cb_fetch_only.setText(_t("label_fetch_only"))
         self.cb_fetch_only.setToolTip(_t("tip_fetch_only"))
         self.cb_dry_run.setText(_t("label_dry_run"))
@@ -522,9 +530,7 @@ class MainWindow(QMainWindow):
         self.config_manager.save(self.config)
 
         # Cancel thread
-        if self.sync_worker and self.sync_worker.isRunning():
-            self.sync_worker.cancel()
-            self.sync_worker.wait()
+        self._cancel_active_worker()
 
         super().closeEvent(event)
 
@@ -543,10 +549,14 @@ class MainWindow(QMainWindow):
 
             self.auth_banner.hide()
             self.log(f"GitHub CLI initialized. Logged in as: {self.auth_user}")
+            self.gh_cli_available = True
         except GitHubServiceError as e:
             self.auth_label.setText(_t("error_gh_msg", error=str(e)))
             self.auth_banner.show()
             self.log(f"GitHub CLI Auth Warning: {e}")
+            self.gh_cli_available = False
+
+        self._update_load_button_state()
 
     def log(self, message: str) -> None:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -579,10 +589,19 @@ class MainWindow(QMainWindow):
             self.log(f"Workspace folder changed to: {selected_dir}. Local status invalidated.")
 
     def _cancel_active_worker(self) -> None:
-        if self.sync_worker and self.sync_worker.isRunning():
-            self.log("Cancelling running worker thread...")
-            self.sync_worker.cancel()
-            self.sync_worker.wait()
+        if self.sync_worker:
+            if self.sync_worker.isRunning():
+                self.log("Cancelling running worker thread...")
+                with contextlib.suppress(Exception):
+                    self.sync_worker.progress_updated.disconnect()
+                with contextlib.suppress(Exception):
+                    self.sync_worker.finished.disconnect()
+                with contextlib.suppress(Exception):
+                    self.sync_worker.log_emitted.disconnect()
+                with contextlib.suppress(Exception):
+                    self.sync_worker.error_occurred.disconnect()
+                self.sync_worker.cancel()
+                self.sync_worker.wait()
             self.sync_worker = None
 
     def load_repositories(self) -> None:
@@ -600,6 +619,9 @@ class MainWindow(QMainWindow):
         self._cancel_active_worker()
         self.log(f"Querying GitHub for organization: {org_name}")
         self._set_app_state("LOADING_REPOSITORIES")
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
         try:
             all_repos = self.github_service.list_repositories(org_name)
@@ -862,8 +884,8 @@ class MainWindow(QMainWindow):
 
         # Grid inputs
         self.org_input.setEnabled(is_idle)
-        self.btn_load.setEnabled(is_idle)
         self.btn_choose_dir.setEnabled(is_idle)
+        self._update_load_button_state()
 
         has_repos = len(self.repositories) > 0
         self.btn_refresh.setEnabled(is_idle and has_repos)
@@ -952,3 +974,29 @@ class MainWindow(QMainWindow):
             act_copy.triggered.connect(do_copy)
 
         menu.exec(self.console_log.viewport().mapToGlobal(pos))
+
+    def _on_org_text_changed(self, text: str) -> None:
+        self.org_debounce_timer.start(300)
+
+    def _on_org_debounce_timeout(self) -> None:
+        # Save org name to config
+        org_text = self.org_input.text().strip()
+        self.config["last_organization"] = org_text
+        self.config_manager.save(self.config)
+        self._update_load_button_state()
+
+    def _is_org_valid(self) -> bool:
+        org_text = self.org_input.text().strip()
+        if not org_text:
+            return False
+        try:
+            ValidationService.normalize_org_name(org_text)
+            return True
+        except ValueError:
+            return False
+
+    def _update_load_button_state(self) -> None:
+        is_idle = self.app_state == "IDLE"
+        is_org_valid = self._is_org_valid()
+        is_gh_cli_available = getattr(self, "gh_cli_available", True)
+        self.btn_load.setEnabled(is_idle and is_org_valid and is_gh_cli_available)
