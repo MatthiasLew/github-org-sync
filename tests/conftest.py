@@ -20,5 +20,9 @@ def prevent_dialog_hangs() -> Generator[None, None, None]:
             "PySide6.QtWidgets.QMessageBox.information",
             return_value=QMessageBox.StandardButton.Ok,
         ),
+        patch(
+            "PySide6.QtWidgets.QMessageBox.critical",
+            return_value=QMessageBox.StandardButton.Ok,
+        ),
     ):
         yield

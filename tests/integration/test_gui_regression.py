@@ -273,10 +273,13 @@ def test_load_change_workspace_inspect_flow(qtbot: Any, mock_services: tuple[Mag
 
     window.org_input.setText("subactor")
     window.workspace_input.setText("C:/mock-workspace")
+    qtbot.waitUntil(lambda: window.btn_load.isEnabled(), timeout=1000)
 
     # Mock status check runner inside SyncWorker to avoid spawning real commands
     with patch("github_org_sync.workers.sync_worker.SyncService.check_local_statuses") as mock_check:
-        mock_check.side_effect = lambda repos, ws, org, progress_callback, is_cancelled_callback: repos
+        mock_check.side_effect = lambda repositories, workspace, org_name, progress_callback, is_cancelled_callback: (
+            repositories
+        )
 
         # 1. Click load
         qtbot.mouseClick(window.btn_load, Qt.MouseButton.LeftButton)
@@ -301,3 +304,63 @@ def test_load_change_workspace_inspect_flow(qtbot: Any, mock_services: tuple[Mag
         # App should be IDLE and table updated
         assert window.app_state == "IDLE"
         assert len(window.repositories) == 2
+
+
+def test_org_input_debounce(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
+    _, mock_save = mock_services
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    # Initially enabled because mock loads "subactor"
+    assert window.btn_load.isEnabled()
+
+    # Clear organization name
+    window.org_input.setText("")
+
+    # Wait for the debounce timer to disable the button
+    qtbot.waitUntil(lambda: not window.btn_load.isEnabled(), timeout=1000)
+    assert not window.btn_load.isEnabled()
+
+    # Type "subactor"
+    window.org_input.setText("subactor")
+
+    # Immediately after typing, the button should still be disabled (debounced)
+    assert not window.btn_load.isEnabled()
+
+    # Wait for the debounce timer (300ms + buffer)
+    qtbot.waitUntil(lambda: window.btn_load.isEnabled(), timeout=1000)
+    assert window.btn_load.isEnabled()
+
+
+def test_worker_idle_transitions(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    # Idle transition after error
+    window._on_worker_error("Some error")
+    assert window.app_state == "IDLE"
+    assert window.progress_bar.value() == 0
+
+    # Idle transition after cancelled inspect
+    window._on_inspect_finished([], was_cancelled=True)
+    assert window.app_state == "IDLE"
+    assert window.progress_bar.value() == 0
+
+    # Idle transition after successful inspect
+    window._on_inspect_finished([], was_cancelled=False)
+    assert window.app_state == "IDLE"
+    assert window.progress_bar.value() == 0
+
+
+def test_status_bar_and_progress(qtbot: Any, mock_services: tuple[MagicMock, MagicMock]) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window._set_app_state("LOADING_REPOSITORIES")
+    assert window.statusBar().currentMessage() == _t("status_loading_org")
+
+    window._set_app_state("INSPECTING_WORKSPACE")
+    assert window.statusBar().currentMessage() == _t("status_checking_cli")
+
+    window._set_app_state("CANCELLING")
+    assert window.statusBar().currentMessage() == _t("status_cancelling")

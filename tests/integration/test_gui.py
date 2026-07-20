@@ -53,17 +53,18 @@ def test_load_repositories_flow(qtbot: Any, mock_services: tuple[MagicMock, Magi
     window = MainWindow()
     qtbot.addWidget(window)
 
-    # 1. Validation warning for empty org name
-    with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn:
-        qtbot.mouseClick(window.btn_load, Qt.MouseButton.LeftButton)
-        mock_warn.assert_called_once()
+    # 1. Check that load button is disabled initially since org name is empty
+    assert not window.btn_load.isEnabled()
 
     # 2. Set valid org and load
     window.org_input.setText("subactor")
+    qtbot.waitUntil(lambda: window.btn_load.isEnabled(), timeout=1000)
 
     # We patch check_local_statuses to execute synchronously or mock it
     with patch("github_org_sync.workers.sync_worker.SyncService.check_local_statuses") as mock_check:
-        mock_check.side_effect = lambda repos, ws, org, progress_callback, is_cancelled_callback: repos
+        mock_check.side_effect = lambda repositories, workspace, org_name, progress_callback, is_cancelled_callback: (
+            repositories
+        )
 
         qtbot.mouseClick(window.btn_load, Qt.MouseButton.LeftButton)
 
