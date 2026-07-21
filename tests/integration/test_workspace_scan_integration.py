@@ -14,6 +14,12 @@ def init_git_repo(path: Path, branch: str = "main", remote_url: str | None = Non
     subprocess.run(
         ["git", "init", "-b", branch], cwd=path, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"], cwd=path, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=path, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
     # Needs a commit to support branches and status checks
     test_file = path / "README.md"
