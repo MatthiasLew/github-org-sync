@@ -35,13 +35,13 @@ jobs:
 
       - name: Run Smoke Test on Compiled EXE
         run: |
-          dist/github-org-sync.exe --smoke-test
+          dist/github-org-sync/github-org-sync.exe --smoke-test
 
       - name: Package EXE to ZIP
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}"
-          Compress-Archive -Path dist/github-org-sync.exe -DestinationPath "dist/github-org-sync-$version-windows-x64.zip" -Force
+          Compress-Archive -Path dist/github-org-sync -DestinationPath "dist/github-org-sync-$version-windows-x64.zip" -Force
 
       - name: Generate Checksum Hash
         shell: pwsh

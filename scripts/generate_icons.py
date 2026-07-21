@@ -1,6 +1,7 @@
-import sys
 import struct
+import sys
 from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
@@ -10,12 +11,12 @@ def compile_pngs_to_ico(png_paths: list[Path], ico_path: Path) -> None:
     """Compiles multiple PNG files into a single multi-resolution ICO file."""
     png_datas = []
     for path in png_paths:
-        with open(path, "rb") as f:
+        with path.open("rb") as f:
             png_datas.append(f.read())
 
     num_images = len(png_paths)
     header = struct.pack("<HHH", 0, 1, num_images)
-    
+
     current_offset = 6 + 16 * num_images
     entries = []
 
@@ -43,7 +44,7 @@ def compile_pngs_to_ico(png_paths: list[Path], ico_path: Path) -> None:
         entries.append(entry)
         current_offset += data_size
 
-    with open(ico_path, "wb") as f:
+    with ico_path.open("wb") as f:
         f.write(header)
         for entry in entries:
             f.write(entry)
@@ -55,7 +56,7 @@ def compile_pngs_to_ico(png_paths: list[Path], ico_path: Path) -> None:
 
 def main() -> None:
     # Requires QGuiApplication to initialize rendering system
-    app = QGuiApplication(sys.argv)
+    _app = QGuiApplication(sys.argv)
 
     svg_path = Path("assets/logo.svg")
     if not svg_path.exists():

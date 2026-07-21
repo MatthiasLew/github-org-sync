@@ -1,7 +1,9 @@
 import json
 import subprocess
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from github_org_sync.services.github_service import (
     GitHubAuthError,
     GitHubCLIMissingError,

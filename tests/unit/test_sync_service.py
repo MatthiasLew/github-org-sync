@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
 from github_org_sync.services.git_service import GitService

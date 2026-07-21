@@ -2,8 +2,10 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
-from PySide6.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt
+
 from github_org_sync.models.repository import Repository
 from github_org_sync.ui.main_window import MainWindow
 
@@ -154,19 +156,19 @@ def test_double_click_resolve(qtbot: Any, mock_services: tuple[MagicMock, MagicM
     repos[0].local_path = Path("/dummy/path")
 
     # 1. Test double-click opens local folder
-    with patch.object(window.table, "_open_folder") as mock_open:
-        with patch("pathlib.Path.exists") as mock_exists:
-            mock_exists.return_value = True
-            window.table.set_repositories(repos)
+    with patch.object(window.table, "_open_folder") as mock_open, patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        window.table.set_repositories(repos)
 
-            # Trigger double click on the first row
-            index = window.table.model().index(0, 1)
-            window.table.doubleClicked.emit(index)
-            mock_open.assert_called_once_with(Path("/dummy/path"))
+        # Trigger double click on the first row
+        index = window.table.model().index(0, 1)
+        window.table.doubleClicked.emit(index)
+        mock_open.assert_called_once_with(Path("/dummy/path"))
 
     # 2. Test _resolve_issue triggers dialog
     with patch("github_org_sync.ui.dialogs.ResolveIssueDialog") as mock_dialog:
         from PySide6.QtWidgets import QDialog
+
         mock_dialog.return_value.exec.return_value = QDialog.DialogCode.Accepted
 
         window.table._resolve_issue(repos[0])

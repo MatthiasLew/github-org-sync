@@ -51,4 +51,5 @@ logs/
 reports/
 *.exe
 *.spec
+!github-org-sync.spec
 tests/tmp/

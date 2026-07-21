@@ -1,5 +1,7 @@
 import sys
+
 from PySide6.QtWidgets import QApplication
+
 from github_org_sync.ui.main_window import MainWindow
 
 
@@ -23,6 +25,7 @@ def main() -> None:
 
             # Verify basic translations loaded
             from github_org_sync.i18n import _t
+
             sample_trans = _t("menu_settings")
             if not sample_trans or sample_trans == "menu_settings":
                 raise ValueError("Translations failed to load or fallback key returned")

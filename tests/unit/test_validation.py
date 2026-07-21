@@ -1,5 +1,7 @@
 from pathlib import Path
+
 import pytest
+
 from github_org_sync.services.validation_service import ValidationService
 
 

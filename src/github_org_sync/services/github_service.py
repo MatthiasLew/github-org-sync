@@ -9,6 +9,7 @@ from github_org_sync.utils.process import run_process
 def _scrub_secrets(text: str) -> str:
     """Redacts potential GitHub CLI tokens from error outputs."""
     import re
+
     return re.sub(r"gh[op]_[a-zA-Z0-9]+", "[REDACTED_TOKEN]", text)
 
 

@@ -2,11 +2,16 @@ from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
-from PySide6.QtWidgets import QMessageBox
 
 
 @pytest.fixture(autouse=True)
 def prevent_dialog_hangs() -> Generator[None, None, None]:
+    try:
+        from PySide6.QtWidgets import QMessageBox
+    except ImportError:
+        yield
+        return
+
     with (
         patch(
             "PySide6.QtWidgets.QMessageBox.question",

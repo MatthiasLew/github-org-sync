@@ -1,9 +1,9 @@
 import sys
-import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
-from github_org_sync.utils.process import run_process, popen_process
+
+from github_org_sync.utils.process import popen_process, run_process
 
 
 @pytest.mark.unit

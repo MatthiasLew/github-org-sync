@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.git, pytest.mark.integration]
-
 from github_org_sync.models.repository import Repository
 from github_org_sync.services.git_service import GitService
 from github_org_sync.ui.main_window import MainWindow
+
+pytestmark = [pytest.mark.git, pytest.mark.integration]
 
 
 def run_git(cwd: Path, args: list[str]) -> subprocess.CompletedProcess[str]:

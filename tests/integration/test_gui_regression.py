@@ -3,8 +3,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-pytestmark = [pytest.mark.gui, pytest.mark.integration]
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox
@@ -13,6 +11,8 @@ from github_org_sync.i18n import _t, translator
 from github_org_sync.models.repository import Repository
 from github_org_sync.ui.main_window import MainWindow
 from github_org_sync.utils.process import run_process
+
+pytestmark = [pytest.mark.gui, pytest.mark.integration]
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ def test_open_folder_cross_platform(qtbot: Any, mock_services: tuple[MagicMock, 
 
     with patch("pathlib.Path.exists", return_value=True):
         # Windows open check
-        with patch("sys.platform", "win32"), patch("os.startfile") as mock_start:
+        with patch("sys.platform", "win32"), patch("os.startfile", create=True) as mock_start:
             window.open_workspace_folder()
             mock_start.assert_called_once_with("C:/mock-workspace")
 
