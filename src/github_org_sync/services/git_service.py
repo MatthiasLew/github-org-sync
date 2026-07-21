@@ -34,8 +34,16 @@ class GitService:
         except Exception:
             return False
 
+    def add_remote(self, path: Path, name: str, url: str) -> None:
+        """Adds a remote to the git repository."""
+        cp = self._run_git(path, ["remote", "add", name, url])
+        if cp.returncode != 0:
+            raise RuntimeError(cp.stderr.strip() or f"git remote add failed with exit code {cp.returncode}")
+
     def is_wrong_remote(self, remote_url: str, org_name: str) -> bool:
         """Checks if origin URL belongs to another owner/organization."""
+        if not org_name:
+            return False
         if not remote_url:
             return True
         # Match github.com/org_name or github.com:org_name or ssh://git@github.com/org_name

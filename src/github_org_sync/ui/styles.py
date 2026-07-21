@@ -74,6 +74,21 @@ DARK_STYLESHEET = """
         border-color: #64748b;
     }
 
+    QPushButton#btnMode {
+        background-color: transparent;
+        border: 1.5px solid #475569;
+        color: #cbd5e1;
+    }
+    QPushButton#btnMode:hover {
+        background-color: #1e293b;
+        border-color: #64748b;
+    }
+    QPushButton#btnMode:checked {
+        background-color: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+    }
+
     /* Text Input Fields */
     QLineEdit {
         background-color: #1e293b; /* Slate 800 */
@@ -295,6 +310,21 @@ LIGHT_STYLESHEET = """
     QPushButton#btnOutline:hover {
         background-color: #f1f5f9; /* Slate 100 */
         border-color: #94a3b8;
+    }
+
+    QPushButton#btnMode {
+        background-color: transparent;
+        border: 1.5px solid #cbd5e1;
+        color: #475569;
+    }
+    QPushButton#btnMode:hover {
+        background-color: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    QPushButton#btnMode:checked {
+        background-color: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
     }
 
     /* Text Input Fields */

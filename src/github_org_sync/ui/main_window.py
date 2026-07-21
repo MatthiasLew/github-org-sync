@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -38,6 +39,7 @@ from github_org_sync.ui.repository_table import RepositoryTable
 from github_org_sync.ui.styles import get_stylesheet
 from github_org_sync.utils.process import run_process
 from github_org_sync.workers.sync_worker import SyncWorker
+from github_org_sync.workers.workspace_scan_worker import WorkspaceScanWorker
 
 
 class MainWindow(QMainWindow):
@@ -74,7 +76,7 @@ class MainWindow(QMainWindow):
         self.git_service = GitService()
         self.gh_cli_available = False
         self.repositories: list[Repository] = []
-        self.sync_worker: SyncWorker | None = None
+        self.sync_worker: SyncWorker | WorkspaceScanWorker | None = None
         self.auth_user = "unknown"
         self.app_state = "IDLE"
 
@@ -124,18 +126,66 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.auth_banner)
         self.auth_banner.hide()
 
-        # Inputs Grid
-        grid_widget = QWidget(self)
-        grid_layout = QGridLayout(grid_widget)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(10)
+        # Mode Switch Selector Row
+        self.mode_widget = QWidget(self)
+        mode_layout = QHBoxLayout(self.mode_widget)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(8)
 
-        # Row 0: GitHub organization
+        self.btn_mode_clone = QPushButton(self)
+        self.btn_mode_clone.setObjectName("btnMode")
+        self.btn_mode_clone.setCheckable(True)
+        self.btn_mode_clone.setAutoExclusive(True)
+        self.btn_mode_clone.clicked.connect(lambda: self.switch_mode("clone"))
+        mode_layout.addWidget(self.btn_mode_clone)
+
+        self.btn_mode_workspace = QPushButton(self)
+        self.btn_mode_workspace.setObjectName("btnMode")
+        self.btn_mode_workspace.setCheckable(True)
+        self.btn_mode_workspace.setAutoExclusive(True)
+        self.btn_mode_workspace.clicked.connect(lambda: self.switch_mode("workspace"))
+        mode_layout.addWidget(self.btn_mode_workspace)
+
+        mode_layout.addStretch()
+        main_layout.addWidget(self.mode_widget)
+
+        # Workspace Path Selector (Common to both modes)
+        ws_widget = QWidget(self)
+        ws_layout = QGridLayout(ws_widget)
+        ws_layout.setContentsMargins(0, 0, 0, 0)
+        ws_layout.setSpacing(10)
+
+        self.label_workspace = QLabel(self)
+        ws_layout.addWidget(self.label_workspace, 0, 0)
+        self.workspace_input = QLineEdit(self)
+        self.workspace_input.setReadOnly(True)
+        ws_layout.addWidget(self.workspace_input, 0, 1)
+        self.btn_choose_dir = QPushButton(self)
+        self.btn_choose_dir.setObjectName("btnOutline")
+        self.btn_choose_dir.clicked.connect(self.choose_workspace)
+        ws_layout.addWidget(self.btn_choose_dir, 0, 2)
+
+        main_layout.addWidget(ws_widget)
+
+        # Stacked Panel
+        self.stacked_widget = QStackedWidget(self)
+
+        # Page 0: Clone Organization Panel
+        page_clone = QWidget()
+        page_clone_layout = QVBoxLayout(page_clone)
+        page_clone_layout.setContentsMargins(0, 0, 0, 0)
+        page_clone_layout.setSpacing(10)
+
+        clone_grid = QWidget()
+        clone_grid_layout = QGridLayout(clone_grid)
+        clone_grid_layout.setContentsMargins(0, 0, 0, 0)
+        clone_grid_layout.setSpacing(10)
+
         self.label_org = QLabel(self)
-        grid_layout.addWidget(self.label_org, 0, 0)
+        clone_grid_layout.addWidget(self.label_org, 0, 0)
         self.org_input = QLineEdit(self)
         self.org_input.textChanged.connect(self._on_org_text_changed)
-        grid_layout.addWidget(self.org_input, 0, 1)
+        clone_grid_layout.addWidget(self.org_input, 0, 1)
 
         load_btn_layout = QHBoxLayout()
         load_btn_layout.setSpacing(6)
@@ -148,24 +198,12 @@ class MainWindow(QMainWindow):
         self.btn_refresh.clicked.connect(self.refresh_status)
         load_btn_layout.addWidget(self.btn_refresh)
 
-        grid_layout.addLayout(load_btn_layout, 0, 2)
-
-        # Row 1: Workspace Folder
-        self.label_workspace = QLabel(self)
-        grid_layout.addWidget(self.label_workspace, 1, 0)
-        self.workspace_input = QLineEdit(self)
-        self.workspace_input.setReadOnly(True)
-        grid_layout.addWidget(self.workspace_input, 1, 1)
-        self.btn_choose_dir = QPushButton(self)
-        self.btn_choose_dir.setObjectName("btnOutline")
-        self.btn_choose_dir.clicked.connect(self.choose_workspace)
-        grid_layout.addWidget(self.btn_choose_dir, 1, 2)
-
-        main_layout.addWidget(grid_widget)
+        clone_grid_layout.addLayout(load_btn_layout, 0, 2)
+        page_clone_layout.addWidget(clone_grid)
 
         # Options Box
-        options_widget = QWidget(self)
-        options_layout = QHBoxLayout(options_widget)
+        self.options_widget = QWidget(self)
+        options_layout = QHBoxLayout(self.options_widget)
         options_layout.setContentsMargins(0, 4, 0, 4)
         options_layout.setSpacing(15)
 
@@ -187,7 +225,57 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self.cb_follow)
         options_layout.addStretch()
 
-        main_layout.addWidget(options_widget)
+        page_clone_layout.addWidget(self.options_widget)
+        self.stacked_widget.addWidget(page_clone)
+
+        # Page 1: Open Existing Workspace Panel
+        page_ws = QWidget()
+        page_ws_layout = QVBoxLayout(page_ws)
+        page_ws_layout.setContentsMargins(0, 0, 0, 0)
+        page_ws_layout.setSpacing(10)
+
+        ws_grid = QWidget()
+        ws_grid_layout = QGridLayout(ws_grid)
+        ws_grid_layout.setContentsMargins(0, 0, 0, 0)
+        ws_grid_layout.setSpacing(10)
+
+        self.cb_scan_recursive = QCheckBox(self)
+        ws_grid_layout.addWidget(self.cb_scan_recursive, 0, 0, 1, 2)
+
+        scan_btn_layout = QHBoxLayout()
+        scan_btn_layout.setSpacing(6)
+        self.btn_scan_workspace = QPushButton(self)
+        self.btn_scan_workspace.clicked.connect(self.scan_workspace)
+        scan_btn_layout.addWidget(self.btn_scan_workspace)
+
+        self.btn_refresh_ws = QPushButton(self)
+        self.btn_refresh_ws.setObjectName("btnOutline")
+        self.btn_refresh_ws.clicked.connect(self.refresh_status)
+        scan_btn_layout.addWidget(self.btn_refresh_ws)
+
+        ws_grid_layout.addLayout(scan_btn_layout, 0, 2)
+
+        # Row 1: Group filter & Detected org
+        self.label_group_filter = QLabel(self)
+        ws_grid_layout.addWidget(self.label_group_filter, 1, 0)
+        self.group_filter_cb = QComboBox(self)
+        self.group_filter_cb.currentTextChanged.connect(self.apply_table_filters)
+        ws_grid_layout.addWidget(self.group_filter_cb, 1, 1)
+
+        self.detected_org_label = QLabel(self)
+        self.detected_org_label.setStyleSheet("font-weight: bold; color: #10b981;")
+        ws_grid_layout.addWidget(self.detected_org_label, 1, 2)
+
+        # Row 2: Compare org button
+        self.btn_compare_org = QPushButton(self)
+        self.btn_compare_org.setObjectName("btnOutline")
+        self.btn_compare_org.clicked.connect(self.compare_workspace_with_org)
+        ws_grid_layout.addWidget(self.btn_compare_org, 2, 0, 1, 3)
+
+        page_ws_layout.addWidget(ws_grid)
+        self.stacked_widget.addWidget(page_ws)
+
+        main_layout.addWidget(self.stacked_widget)
 
         # Selection Control Row
         selection_widget = QWidget(self)
@@ -374,6 +462,18 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("GitHub Organization Sync")
         self.title_label.setText("GitHub Organization Sync")
 
+        # Mode selector buttons
+        self.btn_mode_clone.setText(_t("mode_clone"))
+        self.btn_mode_workspace.setText(_t("mode_workspace"))
+
+        # Workspace scanning panel buttons & labels
+        self.cb_scan_recursive.setText(_t("label_scan_recursive"))
+        self.btn_scan_workspace.setText(_t("btn_scan"))
+        self.btn_refresh_ws.setText(_t("btn_refresh"))
+        self.btn_refresh_ws.setToolTip(_t("tip_refresh_btn"))
+        self.label_group_filter.setText(_t("label_group_filter"))
+        self.btn_compare_org.setText(_t("btn_compare_org"))
+
         # Inputs labels & placeholders
         self.label_org.setText(_t("label_org"))
         self.org_input.setPlaceholderText(_t("tip_org_input"))
@@ -466,6 +566,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(_t("status_loading_org"))
         elif self.app_state == "INSPECTING_WORKSPACE":
             self.statusBar().showMessage(_t("status_checking_cli"))
+        elif self.app_state == "SCANNING_WORKSPACE":
+            self.statusBar().showMessage(
+                _t("status_scanning", current=self.progress_bar.value(), total=self.progress_bar.maximum(), name="...")
+            )
         elif self.app_state == "SYNCING":
             self.statusBar().showMessage(
                 _t("status_syncing", current=self.progress_bar.value(), total=self.progress_bar.maximum(), name="...")
@@ -505,6 +609,10 @@ class MainWindow(QMainWindow):
     def _load_saved_settings(self) -> None:
         self.org_input.setText(self.config.get("last_organization", ""))
         self.workspace_input.setText(self.config.get("last_workspace", ""))
+
+        self.cb_scan_recursive.setChecked(self.config.get("scan_recursive", False))
+        mode = self.config.get("last_mode", "clone")
+        self.switch_mode(mode)
 
         self.cb_include_archived.setChecked(self.config.get("include_archived", False))
         self.cb_include_forks.setChecked(self.config.get("include_forks", True))
@@ -551,6 +659,8 @@ class MainWindow(QMainWindow):
         self.config["fetch_only"] = self.cb_fetch_only.isChecked()
         self.config["dry_run"] = self.cb_dry_run.isChecked()
         self.config["follow_active_repo"] = self.cb_follow.isChecked()
+        self.config["scan_recursive"] = self.cb_scan_recursive.isChecked()
+        self.config["last_mode"] = self.current_mode
 
         # Window size & position
         self.config["window_width"] = self.width()
@@ -913,16 +1023,27 @@ class MainWindow(QMainWindow):
         is_idle = state == "IDLE"
         is_loading = state == "LOADING_REPOSITORIES"
         is_inspecting = state == "INSPECTING_WORKSPACE"
+        is_scanning = state == "SCANNING_WORKSPACE"
         is_syncing = state == "SYNCING"
         is_cancelling = state == "CANCELLING"
+
+        # Mode Selection Buttons
+        self.btn_mode_clone.setEnabled(is_idle)
+        self.btn_mode_workspace.setEnabled(is_idle)
 
         # Grid inputs
         self.org_input.setEnabled(is_idle)
         self.btn_choose_dir.setEnabled(is_idle)
         self._update_load_button_state()
 
+        # Workspace Panel Controls
+        self.cb_scan_recursive.setEnabled(is_idle)
+        self.btn_scan_workspace.setEnabled(is_idle)
         has_repos = len(self.repositories) > 0
         self.btn_refresh.setEnabled(is_idle and has_repos)
+        self.btn_refresh_ws.setEnabled(is_idle and has_repos)
+        self.group_filter_cb.setEnabled(is_idle)
+        self.btn_compare_org.setEnabled(is_idle)
 
         # Options check boxes
         self.cb_include_archived.setEnabled(is_idle)
@@ -945,7 +1066,7 @@ class MainWindow(QMainWindow):
 
         # Operation Row buttons
         self.btn_sync.setEnabled(is_idle and has_repos)
-        self.btn_cancel.setEnabled((is_loading or is_inspecting or is_syncing) and not is_cancelling)
+        self.btn_cancel.setEnabled((is_loading or is_inspecting or is_syncing or is_scanning) and not is_cancelling)
         self.btn_open_ws.setEnabled(not is_syncing)
 
         # Report button state
@@ -1099,5 +1220,226 @@ class MainWindow(QMainWindow):
                 self.log(f"Report JSON: {json_path}")
                 self.log(f"Report MD: {md_path}")
 
+        finally:
+            self._set_app_state("IDLE")
+
+    def switch_mode(self, mode: str) -> None:
+        self.current_mode = mode
+        self.btn_mode_clone.setChecked(mode == "clone")
+        self.btn_mode_workspace.setChecked(mode == "workspace")
+
+        if mode == "clone":
+            self.stacked_widget.setCurrentIndex(0)
+            if self.gh_cli_available:
+                self.auth_banner.hide()
+            else:
+                self.auth_banner.show()
+        else:
+            self.stacked_widget.setCurrentIndex(1)
+            self.auth_banner.hide()
+
+        # Clear active scan/sync and table state on mode switch
+        self._cancel_active_worker()
+        self.repositories = []
+        self.table.set_repositories([])
+        self.apply_table_filters()
+        self._set_app_state("IDLE")
+
+    def scan_workspace(self) -> None:
+        ws_text = self.workspace_input.text().strip()
+        if not ws_text:
+            QMessageBox.warning(self, _t("error_open_title"), _t("tip_workspace_input"))
+            return
+
+        try:
+            ws_path = ValidationService.validate_workspace(ws_text)
+        except ValueError as e:
+            QMessageBox.warning(self, _t("error_open_title"), str(e))
+            return
+
+        self._cancel_active_worker()
+        self.log(f"Scanning local workspace: {ws_path}")
+        self._set_app_state("SCANNING_WORKSPACE")
+        self.progress_bar.setValue(0)
+
+        # Clear current repo list
+        self.repositories = []
+        self.table.set_repositories([])
+
+        from github_org_sync.workers.workspace_scan_worker import WorkspaceScanWorker
+
+        recursive = self.cb_scan_recursive.isChecked()
+
+        self.sync_worker = WorkspaceScanWorker(ws_path, recursive=recursive)
+        self.sync_worker.progress_updated.connect(self._on_scan_progress)
+        self.sync_worker.log_emitted.connect(self.log)
+        self.sync_worker.finished.connect(self._on_scan_finished)
+        self.sync_worker.error_occurred.connect(self._on_worker_error)
+        self.sync_worker.start()
+
+    @Slot(int, int, str)
+    def _on_scan_progress(self, index: int, total: int, repo_path: str) -> None:
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(index)
+        self.statusBar().showMessage(_t("status_scanning", current=index, total=total, name=Path(repo_path).name))
+
+    @Slot(list, bool)
+    def _on_scan_finished(self, repos: list, was_cancelled: bool) -> None:
+        self._set_app_state("IDLE")
+        self.progress_bar.setValue(0)
+
+        if was_cancelled:
+            self.log("Workspace scan cancelled.")
+            return
+
+        # Convert dictionary to Repository objects
+        from github_org_sync.utils.git_url_parser import parse_git_url
+
+        self.repositories = []
+        for r_dict in repos:
+            # Safely get remote url details
+            remote_url = r_dict.get("origin_url") or ""
+            # Fallback hosting/owner logic
+            host = "No remote"
+            owner = "No remote"
+            if remote_url:
+                parsed = parse_git_url(remote_url)
+                if parsed:
+                    host_val = parsed["host"]
+                    owner = parsed["owner"]
+                    if "github.com" in host_val.lower():
+                        host = "GitHub"
+                    elif "gitlab.com" in host_val.lower():
+                        host = "GitLab"
+                    elif "bitbucket.org" in host_val.lower():
+                        host = "Bitbucket"
+                    else:
+                        host = host_val
+                else:
+                    host = "Custom"
+                    owner = "Unknown"
+
+            r_obj = Repository(
+                name=r_dict["repo_name"],
+                url=remote_url,
+                ssh_url=remote_url,
+                is_archived=False,
+                is_fork=False,
+                default_branch=r_dict["branch"] or "main",
+                local_path=r_dict["path"],
+                status=r_dict["status"],
+                branch=r_dict["branch"],
+                ahead=r_dict["ahead"],
+                behind=r_dict["behind"],
+                result=r_dict["message"],
+            )
+            # Tag with computed attributes for grouping
+            r_obj.computed_hosting = host
+            r_obj.computed_owner = owner
+            self.repositories.append(r_obj)
+
+        self.log(f"Scan complete. Found {len(self.repositories)} repositories.")
+
+        # Populate group filtering combo box
+        self._populate_group_filter()
+
+        # Handle auto-detection of organization
+        github_owners = [r.computed_owner for r in self.repositories if getattr(r, "computed_hosting", "") == "GitHub"]
+        unique_owners = sorted(set(github_owners))
+
+        if len(unique_owners) == 1:
+            detected_org = unique_owners[0]
+            self.detected_org_label.setText(_t("detected_org_label", org=detected_org))
+            self.org_input.setText(detected_org)
+        else:
+            self.detected_org_label.setText("")
+
+        self.table.set_repositories(self.repositories)
+        self.apply_table_filters()
+
+    def _populate_group_filter(self) -> None:
+        self.group_filter_cb.blockSignals(True)
+        self.group_filter_cb.clear()
+        self.group_filter_cb.addItem(_t("group_filter_all"), "all")
+
+        groups: dict[str, int] = {}
+        for r in self.repositories:
+            host = getattr(r, "computed_hosting", "No remote")
+            owner = getattr(r, "computed_owner", "No remote")
+            grp_key = f"{host} / {owner}"
+            groups[grp_key] = groups.get(grp_key, 0) + 1
+
+        for grp_name, count in sorted(groups.items()):
+            self.group_filter_cb.addItem(f"{grp_name} ({count})", grp_name)
+
+        self.group_filter_cb.blockSignals(False)
+
+    def compare_workspace_with_org(self) -> None:
+        org_text = self.org_input.text().strip()
+        if not org_text:
+            QMessageBox.warning(self, _t("error_gh_title"), _t("tip_org_input"))
+            return
+
+        try:
+            org_name = ValidationService.normalize_org_name(org_text)
+        except ValueError as e:
+            QMessageBox.warning(self, _t("error_gh_title"), str(e))
+            return
+
+        ws_text = self.workspace_input.text().strip()
+        if not ws_text:
+            QMessageBox.warning(self, _t("error_open_title"), _t("tip_workspace_input"))
+            return
+
+        self.log(f"Comparing workspace with GitHub organization: {org_name}")
+        self._set_app_state("LOADING_REPOSITORIES")
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.processEvents()
+
+        try:
+            org_repos = self.github_service.list_repositories(org_name)
+
+            # Map existing repositories by name
+            existing_repos_map = {r.name: r for r in self.repositories}
+            new_repositories = []
+
+            for o_repo in org_repos:
+                if o_repo.name in existing_repos_map:
+                    # Update/keep existing scanned repository
+                    r_obj = existing_repos_map[o_repo.name]
+                    r_obj.is_archived = o_repo.is_archived
+                    r_obj.is_fork = o_repo.is_fork
+                    new_repositories.append(r_obj)
+                else:
+                    # Missing repository locally! Create missing repo object
+                    r_obj = Repository(
+                        name=o_repo.name,
+                        url=o_repo.url,
+                        ssh_url=o_repo.ssh_url,
+                        is_archived=o_repo.is_archived,
+                        is_fork=o_repo.is_fork,
+                        default_branch=o_repo.default_branch,
+                        status="MISSING",
+                    )
+                    r_obj.computed_hosting = "GitHub"
+                    r_obj.computed_owner = org_name
+                    new_repositories.append(r_obj)
+
+            # Highlight local repositories not in organization
+            org_repo_names = {r.name for r in org_repos}
+            for local_name, r_obj in existing_repos_map.items():
+                if getattr(r_obj, "computed_hosting", "") == "GitHub" and local_name not in org_repo_names:
+                    r_obj.result = "Not in organization"
+
+            self.repositories = new_repositories
+            self.log(f"Comparison finished. Total repositories in view: {len(self.repositories)}")
+            self._populate_group_filter()
+            self.table.set_repositories(self.repositories)
+            self.apply_table_filters()
+
+        except Exception as e:
+            QMessageBox.critical(self, _t("error_gh_title"), f"Failed to compare: {e}")
+            self.log(f"Compare error: {e}")
         finally:
             self._set_app_state("IDLE")

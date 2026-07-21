@@ -103,6 +103,17 @@ class RepositoryTable(QTableWidget):
         # Sorting
         self.setSortingEnabled(True)
 
+    def _get_repo_name(self, item: QTableWidgetItem | None) -> str:
+        if not item:
+            return ""
+        val = item.data(Qt.ItemDataRole.UserRole)
+        if val is not None:
+            return str(val)
+        text = item.text()
+        if text.startswith("[") and "] " in text:
+            return text.split("] ", 1)[-1]
+        return text
+
     def retranslate_ui(self) -> None:
         """Translates the headers and any visible translatable fields."""
         labels = [_t(key) for key in self.COLUMNS]
@@ -116,7 +127,7 @@ class RepositoryTable(QTableWidget):
         for idx in range(self.rowCount()):
             name_item = self.item(idx, 1)
             if name_item:
-                repo_name = name_item.text()
+                repo_name = self._get_repo_name(name_item)
                 repo = next((r for r in self.repositories if r.name == repo_name), None)
                 if repo:
                     # Update translated local status text
@@ -159,7 +170,10 @@ class RepositoryTable(QTableWidget):
             self.setItem(idx, 0, CheckboxTableWidgetItem(cb))
 
             # Column 1: Repository Name
-            name_item = QTableWidgetItem(repo.name)
+            host = getattr(repo, "computed_hosting", "GitHub") if hasattr(repo, "computed_hosting") else "GitHub"
+            display_name = f"[{host}] {repo.name}" if host != "GitHub" else repo.name
+            name_item = QTableWidgetItem(display_name)
+            name_item.setData(Qt.ItemDataRole.UserRole, repo.name)
             name_item.setToolTip(repo.name)
             self.setItem(idx, 1, name_item)
 
@@ -217,7 +231,7 @@ class RepositoryTable(QTableWidget):
         for r in range(self.rowCount()):
             name_item = self.item(r, 1)
             if name_item and name_item.isSelected():
-                selected_names.append(name_item.text())
+                selected_names.append(self._get_repo_name(name_item))
 
         curr_row = self.currentRow()
         curr_col = self.currentColumn()
@@ -231,7 +245,7 @@ class RepositoryTable(QTableWidget):
         # Perform single update
         for row in range(self.rowCount()):
             name_item = self.item(row, 1)
-            if name_item and name_item.text() == repo_name:
+            if name_item and self._get_repo_name(name_item) == repo_name:
                 for repo in self.repositories:
                     if repo.name == repo_name:
                         repo.status = status
@@ -286,7 +300,7 @@ class RepositoryTable(QTableWidget):
         self.clearSelection()
         for r in range(self.rowCount()):
             name_item = self.item(r, 1)
-            if name_item and name_item.text() in selected_names:
+            if name_item and self._get_repo_name(name_item) in selected_names:
                 self.selectRow(r)
 
         if curr_row >= 0 and curr_row < self.rowCount():
@@ -306,7 +320,7 @@ class RepositoryTable(QTableWidget):
         for r in range(self.rowCount()):
             name_item = self.item(r, 1)
             if name_item and name_item.isSelected():
-                selected_names.append(name_item.text())
+                selected_names.append(self._get_repo_name(name_item))
 
         curr_row = self.currentRow()
         curr_col = self.currentColumn()
@@ -322,7 +336,7 @@ class RepositoryTable(QTableWidget):
             found_row = -1
             for r in range(self.rowCount()):
                 name_item = self.item(r, 1)
-                if name_item and name_item.text() == repo.name:
+                if name_item and self._get_repo_name(name_item) == repo.name:
                     found_row = r
                     break
 
@@ -374,7 +388,7 @@ class RepositoryTable(QTableWidget):
         self.clearSelection()
         for r in range(self.rowCount()):
             name_item = self.item(r, 1)
-            if name_item and name_item.text() in selected_names:
+            if name_item and self._get_repo_name(name_item) in selected_names:
                 self.selectRow(r)
 
         if curr_row >= 0 and curr_row < self.rowCount():
@@ -437,7 +451,7 @@ class RepositoryTable(QTableWidget):
         name_item = self.item(row, 1)
         if not name_item:
             return
-        repo_name = name_item.text()
+        repo_name = self._get_repo_name(name_item)
         repo = next((r for r in self.repositories if r.name == repo_name), None)
         if repo and repo.local_path and repo.local_path.exists():
             self._open_folder(Path(repo.local_path))
@@ -452,7 +466,7 @@ class RepositoryTable(QTableWidget):
         if not name_item:
             return
 
-        repo_name = name_item.text()
+        repo_name = self._get_repo_name(name_item)
         repo = next((r for r in self.repositories if r.name == repo_name), None)
         if not repo:
             return
@@ -480,8 +494,18 @@ class RepositoryTable(QTableWidget):
         act_open_folder.triggered.connect(lambda: self._open_folder(Path(repo.local_path)) if repo.local_path else None)
         menu.addAction(act_open_folder)
 
-        # Context action 2: Open GitHub repo page
-        act_open_github = QAction(_t("ctx_open_github"), self)
+        # Context action 2: Open Remote repo page
+        host = getattr(repo, "computed_hosting", "GitHub") if hasattr(repo, "computed_hosting") else "GitHub"
+        if host == "GitHub":
+            text_open_remote = _t("ctx_open_github")
+        elif host == "GitLab":
+            text_open_remote = "Otwórz stronę GitLab" if _t("yes_word") != "Yes" else "Open GitLab page"
+        elif host == "Bitbucket":
+            text_open_remote = "Otwórz stronę Bitbucket" if _t("yes_word") != "Yes" else "Open Bitbucket page"
+        else:
+            text_open_remote = "Otwórz stronę remote" if _t("yes_word") != "Yes" else "Open remote page"
+
+        act_open_github = QAction(text_open_remote, self)
         act_open_github.setEnabled(bool(repo.url))
         act_open_github.triggered.connect(lambda: self._open_url(repo.url))
         menu.addAction(act_open_github)
@@ -573,8 +597,8 @@ class RepositoryTable(QTableWidget):
         except Exception as e:
             QMessageBox.warning(self, _t("error_open_title"), _t("error_open_msg", error=str(e)))
 
-    def filter_rows(self, search_text: str, status_filter: str) -> None:
-        """Hides rows that do not match search query and status filter."""
+    def filter_rows(self, search_text: str, status_filter: str, group_filter: str | None = None) -> None:
+        """Hides rows that do not match search query, status filter, and group filter."""
         search_text = search_text.lower().strip()
 
         # Resolve status filter translation back to translation key
@@ -595,14 +619,13 @@ class RepositoryTable(QTableWidget):
 
         for row in range(self.rowCount()):
             name_item = self.item(row, 1)
-            name = name_item.text().lower() if name_item else ""
+            repo_name = self._get_repo_name(name_item)
 
-            # Check status filter
+            # Check status filter & find repo
             matches_status = True
-            if status_key and status_key != "filter_status_all":
-                repo_name = name_item.text() if name_item else ""
-                repo = next((r for r in self.repositories if r.name == repo_name), None)
-                if repo:
+            repo = next((r for r in self.repositories if r.name == repo_name), None)
+            if repo:
+                if status_key and status_key != "filter_status_all":
                     raw_status = repo.status
                     if status_key == "filter_status_errors":
                         matches_status = raw_status in ("FAILED", "CONFLICT", "WRONG_REMOTE")
@@ -619,8 +642,16 @@ class RepositoryTable(QTableWidget):
                     elif status_key == "state_UP_TO_DATE":
                         matches_status = raw_status == "UP_TO_DATE"
 
-            matches_search = not search_text or (search_text in name)
-            self.setRowHidden(row, not (matches_search and matches_status))
+                # Check group filter
+                matches_group = True
+                if group_filter and group_filter != "all":
+                    host = getattr(repo, "computed_hosting", "GitHub")
+                    owner = getattr(repo, "computed_owner", "No remote")
+                    repo_group = f"{host} / {owner}"
+                    matches_group = repo_group == group_filter
+
+                matches_search = not search_text or (search_text in repo.name.lower())
+                self.setRowHidden(row, not (matches_search and matches_status and matches_group))
 
     def paintEvent(self, event: Any) -> None:
         super().paintEvent(event)

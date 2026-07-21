@@ -10,6 +10,7 @@ def run_process(
     check: bool = False,
     capture_output: bool = True,
     text: bool = True,
+    encoding: str = "utf-8",
     **kwargs: Any,
 ) -> subprocess.CompletedProcess[str]:
     """
@@ -29,10 +30,17 @@ def run_process(
         flags |= 0x08000000
         kwargs["creationflags"] = flags
 
-    return subprocess.run(args, cwd=cwd, check=check, capture_output=capture_output, text=text, **kwargs)
+    return subprocess.run(
+        args, cwd=cwd, check=check, capture_output=capture_output, text=text, encoding=encoding, **kwargs
+    )
 
 
-def popen_process(args: list[str], cwd: Path | str | None = None, **kwargs: Any) -> subprocess.Popen[str]:
+def popen_process(
+    args: list[str],
+    cwd: Path | str | None = None,
+    encoding: str = "utf-8",
+    **kwargs: Any,
+) -> subprocess.Popen[str]:
     """
     Central helper to start subprocesses asynchronously.
     On Windows, sets creationflags=subprocess.CREATE_NO_WINDOW to avoid flashing CMD windows.
@@ -49,7 +57,7 @@ def popen_process(args: list[str], cwd: Path | str | None = None, **kwargs: Any)
         flags |= 0x08000000
         kwargs["creationflags"] = flags
 
-    return subprocess.Popen(args, cwd=cwd, text=True, **kwargs)
+    return subprocess.Popen(args, cwd=cwd, text=True, encoding=encoding, **kwargs)
 
 
 def open_terminal(path: Path) -> bool:

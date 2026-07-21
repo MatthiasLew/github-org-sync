@@ -351,6 +351,49 @@ class ResolveIssueDialog(QDialog):
             btn_keep.clicked.connect(lambda: self._accept_decision("KEEP_AND_SKIP"))
             self.btn_layout.addWidget(btn_keep)
 
+        elif status == "NO_REMOTE":
+            self.details_area.setPlainText(
+                "Lokalne repozytorium nie ma skonfigurowanego zdalnego adresu origin.\n"
+                "Local repository does not have a remote origin address configured."
+            )
+
+            btn_skip = QPushButton(_t("no_remote_skip"), self)
+            btn_skip.clicked.connect(lambda: self._accept_decision("KEEP_AND_SKIP"))
+            self.btn_layout.addWidget(btn_skip)
+
+            btn_open = QPushButton(_t("no_remote_open"), self)
+            btn_open.clicked.connect(self._open_terminal)
+            self.btn_layout.addWidget(btn_open)
+
+            btn_add = QPushButton(_t("no_remote_add"), self)
+            btn_add.clicked.connect(self._on_add_remote)
+            self.btn_layout.addWidget(btn_add)
+
+            btn_copy = QPushButton(_t("no_remote_copy"), self)
+            btn_copy.clicked.connect(self._on_copy_add_remote)
+            self.btn_layout.addWidget(btn_copy)
+
+    def _on_add_remote(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        url, ok = QInputDialog.getText(
+            self,
+            _t("no_remote_add"),
+            "Remote URL (e.g. git@github.com:owner/repo.git):",
+        )
+        if self.path and ok and url.strip():
+            try:
+                self.git_service.add_remote(self.path, "origin", url.strip())
+                QMessageBox.information(self, "Success", "Remote added successfully.")
+                self._accept_decision("REFRESH")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to add remote: {e}")
+
+    def _on_copy_add_remote(self) -> None:
+        cmd = "git remote add origin <URL>"
+        QApplication.clipboard().setText(cmd)
+        QMessageBox.information(self, "Success", f"Copied to clipboard: {cmd}")
+
     def _accept_decision(self, decision: str) -> None:
         self.decision = decision
         self.accept()

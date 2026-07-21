@@ -21,3 +21,7 @@ class Repository:
     requested_action: str | None = None
     performed_action: str | None = None
     result: str | None = None
+
+    # Custom grouping attributes
+    computed_hosting: str = "GitHub"
+    computed_owner: str = "No remote"
