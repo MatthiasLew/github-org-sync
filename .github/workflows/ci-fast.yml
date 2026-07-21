@@ -65,11 +65,9 @@ jobs:
           pytest -m unit
 
       - name: Verify CLI Help & Version
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
-          python -m github_org_sync --help
-          python -m github_org_sync --version
+          python -m github_org_sync.cli --help
+          python -m github_org_sync.cli --version
 
       - name: Headless GUI Smoke Test
         run: |
