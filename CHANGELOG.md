@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Application visual logo (SVG design, generated PNG icons, and Windows executable application icon).
 - Interactive Git Sync Wizard: guides the user through resolving non-trivial repository states (DIRTY, AHEAD, BEHIND, DIVERGED) step-by-step.
-- Resolution actions per state: create backup branches, stash & pull, force push (with manual override), soft discard changes, fast-forward pull, and merge conflict checks.
+- Resolution actions per state: create backup branches, stash & pull, push (no force-push allowed, displays manual override instructions instead), soft discard changes, fast-forward pull, and merge conflict checks.
 - Comprehensive sync result summary displaying counts for skipped, conflict, failed, updated, and resolved repositories.
 - Custom context menu action to trigger the resolution dialog for a specific repository.
 - Double-click table row action to automatically open the resolve issue dialog.

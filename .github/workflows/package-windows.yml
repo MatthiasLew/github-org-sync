@@ -1,0 +1,59 @@
+name: Package Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    name: Build & Smoke Test Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+          python -m pip install pyinstaller
+
+      - name: Compile Windows EXE
+        run: |
+          pyinstaller github-org-sync.spec
+
+      - name: Verify compiled executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/github-org-sync.exe")) {
+            Write-Error "Compiled executable not found in dist/"
+            exit 1
+          }
+
+      - name: Run Smoke Test on Compiled EXE
+        run: |
+          dist/github-org-sync.exe --smoke-test
+
+      - name: Generate Checksum Hash
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/github-org-sync.exe -Algorithm SHA256).Hash
+          echo "SHA256 Hash of EXE: $hash"
+          echo $hash > dist/github-org-sync.exe.sha256
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-org-sync-windows-x64
+          path: |
+            dist/github-org-sync.exe
+            dist/github-org-sync.exe.sha256

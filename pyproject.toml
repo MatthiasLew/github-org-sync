@@ -67,8 +67,21 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q"
+addopts = "-ra -q --strict-markers"
 testpaths = [
     "tests",
 ]
 pythonpath = ["src"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "git: Git repository tests",
+    "gui: PySide6 GUI tests",
+    "slow: Slow-running tests",
+    "security: Security scanning/scanning tests",
+    "smoke: Basic runtime smoke tests",
+    "windows: Windows-specific tests",
+    "linux: Linux-specific tests",
+    "macos: macOS-specific tests",
+    "network: Network-dependent tests",
+]

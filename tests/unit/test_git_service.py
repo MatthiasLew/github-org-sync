@@ -179,3 +179,115 @@ def test_sync_success_clean(mock_run: MagicMock, mock_get_status: MagicMock, git
 
         # Verify pull was called
         mock_run.assert_any_call(Path("/dummy/myrepo"), ["pull", "--ff-only"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_get_local_status_behind(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+
+        cp_url = MagicMock(returncode=0, stdout="https://github.com/org/repo")
+        cp_branch = MagicMock(returncode=0, stdout="main")
+        cp_up = MagicMock(returncode=0, stdout="origin/main")
+        cp_ab = MagicMock(returncode=0, stdout="0\t3")
+        cp_status = MagicMock(returncode=0, stdout="")
+
+        mock_run.side_effect = [cp_url, cp_branch, cp_up, cp_ab, cp_status]
+
+        status, branch, ahead, behind, _ = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "BEHIND"
+        assert behind == 3
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_get_local_status_conflict(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+
+        cp_url = MagicMock(returncode=0, stdout="https://github.com/org/repo")
+        cp_branch = MagicMock(returncode=0, stdout="main")
+        cp_up = MagicMock(returncode=0, stdout="origin/main")
+        cp_ab = MagicMock(returncode=0, stdout="0\t0")
+        # UU indicates a merge conflict (unmerged path)
+        cp_status = MagicMock(returncode=0, stdout="UU file.txt\n")
+
+        mock_run.side_effect = [cp_url, cp_branch, cp_up, cp_ab, cp_status]
+
+        status, _, _, _, _ = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "DIRTY"
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_get_local_status_no_upstream(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+
+        cp_url = MagicMock(returncode=0, stdout="https://github.com/org/repo")
+        cp_branch = MagicMock(returncode=0, stdout="main")
+        # rev-parse @{u} fails (no upstream branch configured)
+        cp_up = MagicMock(returncode=1, stderr="fatal: no upstream configured")
+
+        mock_run.side_effect = [cp_url, cp_branch, cp_up]
+
+        status, _, _, _, _ = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "NO_UPSTREAM"
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_get_local_status_detached_head(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+
+        cp_url = MagicMock(returncode=0, stdout="https://github.com/org/repo")
+        # rev-parse --abbrev-ref HEAD returns "HEAD" under detached state
+        cp_branch = MagicMock(returncode=0, stdout="HEAD")
+
+        mock_run.side_effect = [cp_url, cp_branch]
+
+        status, branch, _, _, _ = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "DETACHED_HEAD"
+        assert branch == "HEAD"
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_get_local_status_wrong_remote(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+
+        # remote points to wrong owner or wrong repo name
+        cp_url = MagicMock(returncode=0, stdout="https://github.com/anotherowner/repo")
+        mock_run.side_effect = [cp_url]
+
+        status, _, _, _, _ = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "WRONG_REMOTE"
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "is_git_repository")
+def test_git_service_exceptions(mock_is_repo: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    # Test permission or execution errors when running process runner
+    with patch("pathlib.Path.exists") as mock_exists:
+        mock_exists.return_value = True
+        mock_is_repo.return_value = True
+        mock_run.side_effect = PermissionError("Access denied")
+
+        # get_local_status should handle the error and return FAILED status
+        status, _, _, _, err_msg = git_service.get_local_status(Path("/dummy"), "org")
+        assert status == "FAILED"
+        assert "Access denied" in err_msg

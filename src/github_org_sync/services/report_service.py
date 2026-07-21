@@ -7,6 +7,12 @@ from typing import Any
 from github_org_sync.models.sync_result import SyncResult
 
 
+def _scrub_secrets(text: str) -> str:
+    """Redacts potential GitHub CLI tokens from error outputs."""
+    import re
+    return re.sub(r"gh[op]_[a-zA-Z0-9]+", "[REDACTED_TOKEN]", text)
+
+
 class ReportService:
     @staticmethod
     def get_app_data_dir() -> Path:
@@ -62,9 +68,9 @@ class ReportService:
         # Prepare Report Data
         report_data = {
             "timestamp": timestamp.isoformat(),
-            "organization": organization,
+            "organization": _scrub_secrets(organization),
             "workspace": str(workspace),
-            "authenticated_user": auth_user,
+            "authenticated_user": _scrub_secrets(auth_user),
             "selected_protocol": protocol,
             "options": options,
             "results": [
@@ -74,8 +80,8 @@ class ReportService:
                     "before_status": r.before_status,
                     "after_status": r.after_status,
                     "duration": round(r.duration, 3),
-                    "result": r.result or "",
-                    "error": r.error or "",
+                    "result": _scrub_secrets(r.result or ""),
+                    "error": _scrub_secrets(r.error or ""),
                 }
                 for r in results
             ],
@@ -87,12 +93,12 @@ class ReportService:
 
         # 2. Save Markdown Report
         md_lines = [
-            f"# Sync Report - {organization}",
+            f"# Sync Report - {_scrub_secrets(organization)}",
             "",
             f"- **Timestamp:** {timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"- **Organization:** {organization}",
+            f"- **Organization:** {_scrub_secrets(organization)}",
             f"- **Workspace:** `{workspace}`",
-            f"- **Authenticated User:** {auth_user}",
+            f"- **Authenticated User:** {_scrub_secrets(auth_user)}",
             f"- **Selected Protocol:** {protocol.upper()}",
             "",
             "## Sync Options",
@@ -117,9 +123,9 @@ class ReportService:
             elif r.after_status in ("WRONG_REMOTE", "BLOCKED", "DIRTY", "DIVERGED"):
                 status_symbol = "⚠️"
 
-            res_msg = r.result or ""
+            res_msg = _scrub_secrets(r.result or "")
             if r.error:
-                res_msg += f" (Error: {r.error})"
+                res_msg += f" (Error: {_scrub_secrets(r.error)})"
 
             md_lines.append(
                 f"| {r.repo_name} | {r.performed_action} | {r.before_status} | {status_symbol} {r.after_status} | {r.duration:.2f} | {res_msg} |"

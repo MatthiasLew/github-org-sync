@@ -1,0 +1,63 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build & Publish Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+          python -m pip install pyinstaller
+
+      - name: Compile Windows EXE
+        run: |
+          pyinstaller github-org-sync.spec
+
+      - name: Run Smoke Test on Compiled EXE
+        run: |
+          dist/github-org-sync.exe --smoke-test
+
+      - name: Package EXE to ZIP
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          Compress-Archive -Path dist/github-org-sync.exe -DestinationPath "dist/github-org-sync-$version-windows-x64.zip" -Force
+
+      - name: Generate Checksum Hash
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $hash = (Get-FileHash "dist/github-org-sync-$version-windows-x64.zip" -Algorithm SHA256).Hash
+          echo "$hash  github-org-sync-$version-windows-x64.zip" > "dist/github-org-sync-$version-windows-x64.zip.sha256"
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/github-org-sync-${{ github.ref_name }}-windows-x64.zip
+            dist/github-org-sync-${{ github.ref_name }}-windows-x64.zip.sha256
+          name: GitHub Organization Sync ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

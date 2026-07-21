@@ -17,6 +17,11 @@ class ValidationService:
             raise ValueError("Organization name or URL cannot be empty")
 
         cleaned = org_input.strip()
+        if not cleaned:
+            raise ValueError("Organization name or URL cannot be empty")
+
+        if len(cleaned) > 39:
+            raise ValueError("Organization name or URL cannot exceed 39 characters")
 
         # Match git@github.com:orgname or git@github.com:orgname/
         ssh_match = re.match(r"^git@github\.com:([^/]+)(?:/)?$", cleaned)

@@ -1,9 +1,7 @@
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 import pytest
-
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
 from github_org_sync.services.git_service import GitService
@@ -21,6 +19,7 @@ def sync_service(mock_git_service: MagicMock) -> SyncService:
     return SyncService(git_service=mock_git_service)
 
 
+@pytest.mark.unit
 def test_filter_repositories(sync_service: SyncService) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", is_archived=False, is_fork=False),
@@ -44,6 +43,7 @@ def test_filter_repositories(sync_service: SyncService) -> None:
     assert len(f3) == 4
 
 
+@pytest.mark.unit
 def test_check_local_statuses(sync_service: SyncService, mock_git_service: MagicMock) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1"),
@@ -66,6 +66,7 @@ def test_check_local_statuses(sync_service: SyncService, mock_git_service: Magic
     assert checked[1].local_path == workspace / "repo2"
 
 
+@pytest.mark.unit
 def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_service: MagicMock) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
@@ -111,6 +112,14 @@ def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_se
     assert results[2].performed_action == "UPDATED"
 
 
+@pytest.mark.unit
+def test_sync_repositories_empty_queue(sync_service: SyncService) -> None:
+    workspace = Path("/dummy/workspace")
+    results = sync_service.sync_repositories([], workspace, "org", {})
+    assert results == []
+
+
+@pytest.mark.unit
 def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_service: MagicMock) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
@@ -145,6 +154,46 @@ def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_serv
     assert results[1].performed_action == "CANCELLED"
 
 
+@pytest.mark.unit
+def test_sync_repositories_cancel_before_sync(sync_service: SyncService) -> None:
+    repos = [
+        Repository("repo1", "url1", "ssh1", status="MISSING"),
+        Repository("repo2", "url2", "ssh2", status="MISSING"),
+    ]
+    # Cancel immediately
+    workspace = Path("/dummy/workspace")
+    results = sync_service.sync_repositories(
+        repos, workspace, "org", {"use_ssh": False}, is_cancelled_callback=lambda: True
+    )
+
+    assert len(results) == 2
+    assert results[0].performed_action == "CANCELLED"
+    assert results[1].performed_action == "CANCELLED"
+
+
+@pytest.mark.unit
+def test_sync_repositories_dry_run(sync_service: SyncService, mock_git_service: MagicMock) -> None:
+    repos = [
+        Repository("repo1", "url1", "ssh1", status="MISSING"),
+    ]
+
+    mock_git_service.clone.return_value = SyncResult(
+        repo_name="repo1",
+        requested_action="CLONE",
+        performed_action="NO_CHANGE",
+        before_status="MISSING",
+        after_status="MISSING",
+        duration=0.1,
+        result="[DRY-RUN]",
+    )
+
+    workspace = Path("/dummy/workspace")
+    results = sync_service.sync_repositories(repos, workspace, "org", {"dry_run": True})
+    assert len(results) == 1
+    assert results[0].performed_action == "NO_CHANGE"
+
+
+@pytest.mark.unit
 def test_report_service_generation(tmp_path: Path) -> None:
     results = [
         SyncResult(
@@ -163,7 +212,7 @@ def test_report_service_generation(tmp_path: Path) -> None:
             before_status="UP_TO_DATE",
             after_status="UP_TO_DATE",
             duration=0.5,
-            error="Error message",
+            error="Error message with gho_abcdef1234567890 token",  # Test secret redact in report
         ),
     ]
 
@@ -189,10 +238,12 @@ def test_report_service_generation(tmp_path: Path) -> None:
             assert data["authenticated_user"] == "MatthiasLew"
             assert len(data["results"]) == 2
             assert data["results"][0]["repository"] == "repo1"
-            assert data["results"][1]["error"] == "Error message"
+            # The token in error should be scrubbed in reports as well
+            assert "gho_" not in data["results"][1]["error"]
 
-        # Verify MD content
+        # Verify MD content and Unicode support
         md_text = md_path.read_text(encoding="utf-8")
         assert "# Sync Report - myorg" in md_text
         assert "repo1" in md_text
         assert "repo2" in md_text
+        assert "gho_" not in md_text

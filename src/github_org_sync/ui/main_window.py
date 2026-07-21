@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
             assets_dir = Path(sys._MEIPASS) / "assets"
         else:
             assets_dir = Path(__file__).resolve().parent.parent.parent.parent / "assets"
-        logo_png = assets_dir / "logo-256.png"
+        logo_png = assets_dir / "icons" / "app-256.png"
         if logo_png.exists():
             self.setWindowIcon(QIcon(str(logo_png)))
 

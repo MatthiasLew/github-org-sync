@@ -16,6 +16,13 @@ def run_process(
     Central helper to run subprocesses.
     On Windows, sets creationflags=subprocess.CREATE_NO_WINDOW to avoid flashing CMD windows.
     """
+    if args:
+        cmd_name = Path(args[0]).name.lower()
+        if cmd_name in ("git", "git.exe"):
+            for arg in args:
+                if arg == "--force" or arg == "--force-with-lease" or arg.startswith("--force="):
+                    raise ValueError("Force push is strictly prohibited in github-org-sync.")
+
     if sys.platform == "win32":
         flags = kwargs.get("creationflags", 0)
         # 0x08000000 is CREATE_NO_WINDOW
@@ -30,6 +37,13 @@ def popen_process(args: list[str], cwd: Path | str | None = None, **kwargs: Any)
     Central helper to start subprocesses asynchronously.
     On Windows, sets creationflags=subprocess.CREATE_NO_WINDOW to avoid flashing CMD windows.
     """
+    if args:
+        cmd_name = Path(args[0]).name.lower()
+        if cmd_name in ("git", "git.exe"):
+            for arg in args:
+                if arg == "--force" or arg == "--force-with-lease" or arg.startswith("--force="):
+                    raise ValueError("Force push is strictly prohibited in github-org-sync.")
+
     if sys.platform == "win32":
         flags = kwargs.get("creationflags", 0)
         flags |= 0x08000000

@@ -6,6 +6,12 @@ from github_org_sync.models.repository import Repository
 from github_org_sync.utils.process import run_process
 
 
+def _scrub_secrets(text: str) -> str:
+    """Redacts potential GitHub CLI tokens from error outputs."""
+    import re
+    return re.sub(r"gh[op]_[a-zA-Z0-9]+", "[REDACTED_TOKEN]", text)
+
+
 class GitHubServiceError(Exception):
     pass
 
@@ -56,7 +62,9 @@ class GitHubService:
             output = (cp.stdout or "") + (cp.stderr or "")
 
             if cp.returncode != 0:
-                raise GitHubAuthError(f"GitHub CLI authentication check failed (exit code {cp.returncode}):\n{output}")
+                raise GitHubAuthError(
+                    f"GitHub CLI authentication check failed (exit code {cp.returncode}):\n{_scrub_secrets(output)}"
+                )
 
             # Parse user name from output if possible
             # e.g., "Logged in to github.com account MatthiasLew"
@@ -92,7 +100,7 @@ class GitHubService:
                     raise OrganizationNotFoundError(f"Organization '{org_name}' not found on GitHub.")
                 if "authentication" in stderr_lower or "login" in stderr_lower:
                     raise GitHubAuthError("Authentication required or token expired. Run `gh auth login`.")
-                raise GitHubServiceError(f"GitHub CLI failed to list repositories:\n{cp.stderr}")
+                raise GitHubServiceError(f"GitHub CLI failed to list repositories:\n{_scrub_secrets(cp.stderr)}")
 
             data = json.loads(cp.stdout or "[]")
             repos = []
@@ -118,6 +126,6 @@ class GitHubService:
             return repos
 
         except subprocess.SubprocessError as e:
-            raise GitHubServiceError(f"Subprocess error listing repositories: {e}") from e
+            raise GitHubServiceError(f"Subprocess error listing repositories: {_scrub_secrets(str(e))}") from e
         except json.JSONDecodeError as e:
-            raise GitHubServiceError(f"Failed to parse GitHub CLI response: {e}") from e
+            raise GitHubServiceError(f"Failed to parse GitHub CLI response: {_scrub_secrets(str(e))}") from e

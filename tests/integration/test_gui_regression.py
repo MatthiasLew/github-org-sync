@@ -3,6 +3,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytestmark = [pytest.mark.gui, pytest.mark.integration]
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox

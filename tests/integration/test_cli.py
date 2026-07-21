@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.integration]
+
 from github_org_sync.cli import main
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
