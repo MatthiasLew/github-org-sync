@@ -79,7 +79,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dialog_sync_title": "Potwierdzenie operacji",
         "dialog_sync_msg": "Czy chcesz rozpocząć synchronizację wybranych repozytoriów?\n\nOrganizacja: {org}\nFolder: {workspace}\nWybrane repozytoria: {count}\nTryb Dry Run: {dry}\nAutostash: {stash}",
         "about_title": "O programie github-org-sync",
-        "about_text": "<h3>GitHub Organization Sync 1.2.0</h3><p>Narzędzie GUI/CLI do bezpiecznej synchronizacji repozytoriów organizacji GitHub.</p><p>Licencja: MIT. Wersja stabilna 1.2.0.</p><p>GitHub is a trademark of GitHub, Inc. This project is not affiliated with or endorsed by GitHub.</p>",
+        "about_text": "<h3>GitHub Organization Sync 1.3.0</h3><p>Narzędzie GUI/CLI do bezpiecznej synchronizacji repozytoriów organizacji GitHub.</p><p>Licencja: MIT. Wersja stabilna 1.3.0.</p><p>GitHub is a trademark of GitHub, Inc. This project is not affiliated with or endorsed by GitHub.</p>",
         "help_title": "Jak zacząć",
         "help_text": "<h3>Krótki przewodnik:</h3>"
         "<ol>"
@@ -261,7 +261,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dialog_sync_title": "Confirm Synchronization",
         "dialog_sync_msg": "Do you want to start synchronization for the selected repositories?\n\nOrganization: {org}\nFolder: {workspace}\nSelected repositories: {count}\nDry Run: {dry}\nAutostash: {stash}",
         "about_title": "About github-org-sync",
-        "about_text": "<h3>GitHub Organization Sync 1.2.0</h3><p>GUI/CLI tool for safe synchronization of GitHub organization repositories.</p><p>License: MIT. Stable version 1.2.0.</p><p>GitHub is a trademark of GitHub, Inc. This project is not affiliated with or endorsed by GitHub.</p>",
+        "about_text": "<h3>GitHub Organization Sync 1.3.0</h3><p>GUI/CLI tool for safe synchronization of GitHub organization repositories.</p><p>License: MIT. Stable version 1.3.0.</p><p>GitHub is a trademark of GitHub, Inc. This project is not affiliated with or endorsed by GitHub.</p>",
         "help_title": "Getting Started",
         "help_text": "<h3>Quick guide:</h3>"
         "<ol>"

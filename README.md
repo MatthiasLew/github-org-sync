@@ -4,19 +4,18 @@
 
 ![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
-## New in Version 1.2.0
-- **Interactive Git Sync Wizard**: Guides you step-by-step through resolving non-trivial repository states (DIRTY, AHEAD, BEHIND, DIVERGED).
-- **Comprehensive Conflict Resolution**: Choose to stash & pull, force push, create backup branches, soft discard local edits, fast-forward pull, or do deep merges directly from dialog interfaces.
-- **Double-Click Resolution Dialog**: Double-click any repository row or select "Resolve Issue" from the custom context menu to invoke the Git Resolve dialog.
-- **Application Logo**: Beautiful vector SVG logo, generated multi-size icons, and embedded executable application icon.
-- **Summary Count Report**: Shows sync success, failure, updated, conflict, and skipped totals.
-- **Detailed Sync Statusing**: Richer status information in synchronization report files (`requested_action`, `performed_action`, `before_status`, `after_status`).
+## New in Version 1.3.0
+- **Open Existing Workspace Mode**: Scan and inspect local Git repositories directly without specifying a GitHub organization name.
+- **Support for Non-GitHub Repositories**: Safely scan and perform local Git operations (Fetch, Update, Open, etc.) on GitLab, Bitbucket, and other self-hosted/custom Git locations.
+- **Detected Organization Auto-fill**: Automatically detects and populates the organization name if all scanned GitHub repositories belong to the same owner.
+- **Repository Grouping and Filtering**: Filter repository views by hosting platforms and owners (e.g. `GitHub / my-org`, `GitLab / project`).
+- **Workspace-to-Org Verification**: Instantly compare scanned local workspace repositories against any GitHub organization to highlight missing/extra repositories.
 
 ## Windows Release Installation
 
 To run the application on Windows without installing Python:
 
-1. Download the release package (`github-org-sync-v1.2.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
+1. Download the release package (`github-org-sync-v1.3.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
 2. Extract the complete archive to a directory of your choice.
 3. Run `github-org-sync.exe` inside the extracted folder.
 

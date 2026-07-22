@@ -79,8 +79,8 @@ def test_workspace_scanning_flow(qtbot: Any, mock_gui_services: Any, tmp_path: P
     repo_gl = tmp_path / "repo-gitlab"
     repo_no = tmp_path / "repo-none"
 
-    init_git_repo(repo_gh, remote_url="https://github.com/org-a/repo-github.git")
-    init_git_repo(repo_gl, remote_url="https://gitlab.com/org-b/repo-gitlab.git")
+    init_git_repo(repo_gh, remote_url="https://github.com/org-a/repo-github.git", set_upstream=False)
+    init_git_repo(repo_gl, remote_url="https://gitlab.com/org-b/repo-gitlab.git", set_upstream=False)
     init_git_repo(repo_no)
 
     window = MainWindow()
@@ -120,7 +120,7 @@ def test_compare_workspace_with_org(qtbot: Any, mock_gui_services: Any, tmp_path
     # organization list contains repo-a and repo-b.
     # Local workspace contains repo-a only.
     repo_a = tmp_path / "repo-a"
-    init_git_repo(repo_a, remote_url="https://github.com/my-org/repo-a.git")
+    init_git_repo(repo_a, remote_url="https://github.com/my-org/repo-a.git", set_upstream=False)
 
     window = MainWindow()
     qtbot.addWidget(window)

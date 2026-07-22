@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-22
+
+### Added
+- **Open Existing Workspace Mode**: Scan and inspect local Git repositories directly without specifying a GitHub organization name.
+- **Support for Non-GitHub Repositories**: Safely scan and perform local Git operations (Fetch, Update, Open, etc.) on GitLab, Bitbucket, and other self-hosted/custom Git locations.
+- **Detected Organization Auto-fill**: Automatically detects and populates the organization name if all scanned GitHub repositories belong to the same owner.
+- **Repository Grouping and Filtering**: Filter repository views by hosting platforms and owners (e.g. `GitHub / my-org`, `GitLab / project`).
+- **Workspace-to-Org Verification**: Instantly compare scanned local workspace repositories against any GitHub organization to highlight missing/extra repositories.
+- Persistence of the chosen workspace scanner settings and last-used app mode on application exit.
+
+### Fixed
+- Fixed subprocess UTF-8 encoding page mismatch on Windows environments to prevent Polish and special character mojibake.
+- Resolved unhandled exceptions in the repository resolver for non-GitHub/No-remote repositories.
+
 ## [1.2.0] - 2026-07-20
 
 ### Added
