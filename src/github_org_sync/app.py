@@ -1,8 +1,37 @@
 import sys
+import traceback
+from types import TracebackType
 
 from PySide6.QtWidgets import QApplication
 
 from github_org_sync.ui.main_window import MainWindow
+
+
+def handle_exception(exctype: type[BaseException], value: BaseException, tb: TracebackType | None) -> None:
+    # Do not intercept exceptions if running inside pytest or smoke test
+    if "pytest" in sys.modules or "--smoke-test" in sys.argv:
+        sys.__excepthook__(exctype, value, tb)
+        return
+
+    # Print to stderr
+    sys.__excepthook__(exctype, value, tb)
+
+    # Spawn crash report dialog only if QApplication instance exists
+    if QApplication.instance():
+        try:
+            from github_org_sync.ui.crash_dialog import CrashReportDialog
+
+            tb_lines = traceback.format_exception(exctype, value, tb)
+            tb_text = "".join(tb_lines)
+
+            dialog = CrashReportDialog(exctype.__name__, str(value), tb_text)
+            dialog.exec()
+        except Exception as e:
+            print(f"Failed to show crash report dialog: {e}", file=sys.stderr)
+
+
+# Register global exception handler
+sys.excepthook = handle_exception
 
 
 def main() -> None:
