@@ -25,7 +25,7 @@ def test_sanitize_error_text_home_dir() -> None:
     assert fake_home not in sanitized
 
 
-@pytest.mark.unit
+@pytest.mark.gui
 def test_crash_dialog_url_generation(qtbot) -> None:
     # We use qtbot to safely run GUI code in unit tests without actual windows popping up
     error_type = "ValueError"
