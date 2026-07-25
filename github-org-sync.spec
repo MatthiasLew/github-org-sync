@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['src\\github_org_sync\\__main__.py'],
+    ['src/github_org_sync/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[('assets', 'assets')],
@@ -32,7 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets\\github-org-sync.ico',
+    icon='assets/github-org-sync.ico',
 )
 coll = COLLECT(
     exe,
