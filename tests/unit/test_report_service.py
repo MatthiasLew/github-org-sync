@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,15 +27,19 @@ def test_scrub_secrets() -> None:
 
 @pytest.mark.unit
 def test_get_app_data_dir_default() -> None:
+    if sys.platform == "win32":
+        pytest.skip("Unix-specific test")
     # Test fallback behavior when APPDATA is not present in environment
     with patch.dict("os.environ", {}, clear=True), patch("pathlib.Path.home") as mock_home:
-        mock_home.return_value = Path("C:/Users/testuser")
+        mock_home.return_value = Path("/home/testuser")
         dir_path = ReportService.get_app_data_dir()
-        assert dir_path == Path("C:/Users/testuser/.config/github-org-sync")
+        assert dir_path == Path("/home/testuser/.config/github-org-sync")
 
 
 @pytest.mark.unit
 def test_get_app_data_dir_windows() -> None:
+    if sys.platform != "win32":
+        pytest.skip("Windows-specific test")
     # Test Windows AppData behavior
     with patch("os.name", "nt"), patch.dict("os.environ", {"APPDATA": "C:\\Users\\testuser\\AppData\\Roaming"}):
         dir_path = ReportService.get_app_data_dir()
