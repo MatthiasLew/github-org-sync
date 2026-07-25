@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from github_org_sync import __version__
 from github_org_sync.config import ConfigManager
 from github_org_sync.i18n import _t, translator
 from github_org_sync.models.repository import Repository
@@ -37,8 +38,10 @@ from github_org_sync.services.report_service import ReportService
 from github_org_sync.services.validation_service import ValidationService
 from github_org_sync.ui.repository_table import RepositoryTable
 from github_org_sync.ui.styles import get_stylesheet
+from github_org_sync.ui.update_dialog import UpdateDialog
 from github_org_sync.utils.process import run_process
 from github_org_sync.workers.sync_worker import SyncWorker
+from github_org_sync.workers.update_worker import UpdateCheckWorker
 from github_org_sync.workers.workspace_scan_worker import WorkspaceScanWorker
 
 
@@ -98,6 +101,8 @@ class MainWindow(QMainWindow):
         # Enforce initial IDLE state
         self._set_app_state("IDLE")
 
+        self.check_for_updates_silently()
+
     def _setup_ui(self) -> None:
         # Central widget
         central_widget = QWidget(self)
@@ -125,6 +130,21 @@ class MainWindow(QMainWindow):
         banner_layout.addWidget(self.btn_auth_retry)
         main_layout.addWidget(self.auth_banner)
         self.auth_banner.hide()
+
+        # Update Notification Banner
+        self.update_banner = QFrame(self)
+        self.update_banner.setStyleSheet("background-color: #1e3a8a; border-radius: 6px; border: 1px solid #3b82f6;")
+        update_banner_layout = QHBoxLayout(self.update_banner)
+        update_banner_layout.setContentsMargins(12, 8, 12, 8)
+        self.update_label = QLabel(self.update_banner)
+        self.update_label.setStyleSheet("color: #93c5fd; font-weight: bold;")
+        update_banner_layout.addWidget(self.update_label)
+        self.btn_update_action = QPushButton(self.update_banner)
+        self.btn_update_action.setObjectName("btnOutline")
+        self.btn_update_action.clicked.connect(self._show_update_dialog_from_banner)
+        update_banner_layout.addWidget(self.btn_update_action)
+        main_layout.addWidget(self.update_banner)
+        self.update_banner.hide()
 
         # Mode Switch Selector Row
         self.mode_widget = QWidget(self)
@@ -438,6 +458,10 @@ class MainWindow(QMainWindow):
         self.act_about = self.menu_help.addAction("")
         self.act_about.triggered.connect(self.show_about)
 
+        self.menu_help.addSeparator()
+        self.act_check_updates = self.menu_help.addAction("")
+        self.act_check_updates.triggered.connect(self.check_for_updates_manually)
+
         self.retranslate_ui()
         self.update_menu_checks()
 
@@ -550,6 +574,11 @@ class MainWindow(QMainWindow):
 
         self.act_getting_started.setText(_t("menu_getting_started"))
         self.act_about.setText(_t("menu_about"))
+        self.act_check_updates.setText(_t("menu_check_updates"))
+
+        if hasattr(self, "latest_version") and self.latest_version:
+            self.update_label.setText(_t("update_available_banner", version=self.latest_version))
+            self.btn_update_action.setText(_t("btn_update_now"))
 
         self.btn_auth_retry.setText(_t("btn_refresh"))
 
@@ -1109,6 +1138,63 @@ class MainWindow(QMainWindow):
 
     def show_about(self) -> None:
         QMessageBox.information(self, _t("about_title"), _t("about_text"), QMessageBox.StandardButton.Ok)
+
+    def check_for_updates_silently(self) -> None:
+        """Starts a background thread to check for updates silently on startup."""
+        if "pytest" in sys.modules:
+            return
+        self._silent_update_worker = UpdateCheckWorker(self)
+        self._silent_update_worker.finished.connect(self._on_silent_update_check_finished)
+        self._silent_update_worker.start()
+
+    def _on_silent_update_check_finished(
+        self, has_update: bool, latest_version: str, release_notes: str, download_url: str
+    ) -> None:
+        if has_update and download_url:
+            self.latest_version = latest_version
+            self.release_notes = release_notes
+            self.download_url = download_url
+            self.update_label.setText(_t("update_available_banner", version=latest_version))
+            self.btn_update_action.setText(_t("btn_update_now"))
+            self.update_banner.show()
+
+    def _show_update_dialog_from_banner(self) -> None:
+        if hasattr(self, "latest_version") and self.latest_version:
+            dialog = UpdateDialog(self.latest_version, self.release_notes, self.download_url, self)
+            dialog.exec()
+
+    def check_for_updates_manually(self) -> None:
+        """Starts a manual check for updates, showing progress and result dialogs."""
+        self.statusBar().showMessage(_t("status_checking_updates"))
+        self._manual_update_worker = UpdateCheckWorker(self)
+        self._manual_update_worker.finished.connect(self._on_manual_update_check_finished)
+        self._manual_update_worker.error_occurred.connect(self._on_manual_update_check_failed)
+        self._manual_update_worker.start()
+
+    def _on_manual_update_check_finished(
+        self, has_update: bool, latest_version: str, release_notes: str, download_url: str
+    ) -> None:
+        self.statusBar().clearMessage()
+        if has_update and download_url:
+            self.latest_version = latest_version
+            self.release_notes = release_notes
+            self.download_url = download_url
+            dialog = UpdateDialog(latest_version, release_notes, download_url, self)
+            dialog.exec()
+        else:
+            QMessageBox.information(
+                self,
+                _t("update_no_updates_title"),
+                _t("update_no_updates_msg", version=__version__),
+            )
+
+    def _on_manual_update_check_failed(self, error_msg: str) -> None:
+        self.statusBar().clearMessage()
+        QMessageBox.critical(
+            self,
+            _t("update_error_title"),
+            _t("update_error_msg", error=error_msg),
+        )
 
     def _show_log_context_menu(self, pos: Any) -> None:
         from PySide6.QtWidgets import QApplication
