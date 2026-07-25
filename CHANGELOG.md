@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-07-25
+
+### Added
+- **Cross-Platform Release Packages**: Packaged native executables and binaries for Linux (`.tar.gz`) and macOS (`.zip`) along with Windows (`.zip`).
+- Cross-platform spec configurations for PyInstaller using forward slash paths.
+
+### Fixed
+- Fixed directory zipping path error inside macOS packaging and publishing pipelines.
+
 ## [1.3.0] - 2026-07-22
 
 ### Added

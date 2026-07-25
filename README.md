@@ -4,6 +4,10 @@
 
 ![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
+## New in Version 1.3.1
+- **Cross-Platform Release Packages**: Packaged native executables and binaries for Linux (`.tar.gz`) and macOS (`.zip`) along with Windows (`.zip`).
+- Cross-platform spec configurations for PyInstaller.
+
 ## New in Version 1.3.0
 - **Open Existing Workspace Mode**: Scan and inspect local Git repositories directly without specifying a GitHub organization name.
 - **Support for Non-GitHub Repositories**: Safely scan and perform local Git operations (Fetch, Update, Open, etc.) on GitLab, Bitbucket, and other self-hosted/custom Git locations.
@@ -15,7 +19,7 @@
 
 To run the application on Windows without installing Python:
 
-1. Download the release package (`github-org-sync-v1.3.0-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
+1. Download the release package (`github-org-sync-v1.3.1-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
 2. Extract the complete archive to a directory of your choice.
 3. Run `github-org-sync.exe` inside the extracted folder.
 

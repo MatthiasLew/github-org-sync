@@ -79,4 +79,4 @@ def test_cli_version(capsys: Any) -> None:
     captured = capsys.readouterr()
     # Argparse may output to stdout or stderr depending on Python versions/environments
     output = captured.out or captured.err
-    assert "github-org-sync 1.3.0" in output
+    assert "github-org-sync 1.3.1" in output
