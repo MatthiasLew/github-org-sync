@@ -36,20 +36,25 @@ class SyncService:
         org_name: str,
         progress_callback: Callable[[int, int, str], None] | None = None,
         is_cancelled_callback: Callable[[], bool] | None = None,
+        max_workers: int = 4,
     ) -> list[Repository]:
         """
-        Inspects the local directory for each repository and updates their status/branch/ahead/behind.
+        Inspects the local directory for each repository in parallel and updates their status.
         """
+        import concurrent.futures
+        from threading import Lock
+
         total = len(repositories)
-        for idx, repo in enumerate(repositories):
+        completed_lock = Lock()
+        completed_count = 0
+
+        def inspect_single(repo: Repository) -> None:
+            nonlocal completed_count
             if is_cancelled_callback and is_cancelled_callback():
-                break
+                return
 
             repo_path = workspace / repo.name
             repo.local_path = repo_path
-
-            if progress_callback:
-                progress_callback(idx + 1, total, repo.name)
 
             status, branch, ahead, behind, msg = self.git_service.get_local_status(repo_path, org_name)
 
@@ -61,6 +66,21 @@ class SyncService:
             repo.performed_action = None
             repo.result = msg
 
+            with completed_lock:
+                completed_count += 1
+                current_completed = completed_count
+
+            if progress_callback:
+                progress_callback(current_completed, total, repo.name)
+
+        # Run checks in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(inspect_single, repo) for repo in repositories]
+            for _future in concurrent.futures.as_completed(futures):
+                if is_cancelled_callback and is_cancelled_callback():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
+
         return repositories
 
     def sync_repositories(
@@ -71,10 +91,14 @@ class SyncService:
         options: dict[str, Any],
         progress_callback: Callable[[int, int, Repository, SyncResult], None] | None = None,
         is_cancelled_callback: Callable[[], bool] | None = None,
+        max_workers: int = 4,
     ) -> list[SyncResult]:
         """
-        Synchronizes (clones or updates) a list of selected repositories.
+        Synchronizes (clones or updates) selected repositories in parallel.
         """
+        import concurrent.futures
+        from threading import Lock
+
         use_ssh = options.get("use_ssh", False)
         preserve_local_changes = options.get("preserve_local_changes", True)
         fetch_only = options.get("fetch_only", False)
@@ -84,54 +108,48 @@ class SyncService:
         results: list[SyncResult] = []
         total = len(repositories)
 
-        for idx, repo in enumerate(repositories):
+        results_lock = Lock()
+        completed_count = 0
+
+        def sync_single(repo: Repository) -> None:
+            nonlocal completed_count
             if is_cancelled_callback and is_cancelled_callback():
-                # Mark remaining as cancelled
-                for remaining_repo in repositories[idx:]:
-                    res = SyncResult(
-                        repo_name=remaining_repo.name,
-                        requested_action="FETCH" if fetch_only else "SYNC",
-                        performed_action="CANCELLED",
-                        before_status=remaining_repo.status,
-                        after_status=remaining_repo.status,
-                        duration=0.0,
-                        result="Sync cancelled by user.",
-                    )
-                    results.append(res)
-                    if progress_callback:
-                        progress_callback(len(results), total, remaining_repo, res)
-                break
-
-            repo_path = workspace / repo.name
-            repo.local_path = repo_path
-            before_status = repo.status
-
-            if before_status == "MISSING":
-                # Clone
-                res = self.git_service.clone(repo, repo_path, use_ssh=use_ssh, dry_run=dry_run)
-            elif before_status in ("NOT_A_REPOSITORY", "WRONG_REMOTE", "FAILED"):
-                # Non-updatable states, skip
                 res = SyncResult(
                     repo_name=repo.name,
                     requested_action="FETCH" if fetch_only else "SYNC",
-                    performed_action="SKIPPED",
-                    before_status=before_status,
-                    after_status=before_status,
+                    performed_action="CANCELLED",
+                    before_status=repo.status,
+                    after_status=repo.status,
                     duration=0.0,
-                    result=f"Skipped due to status: {before_status}",
+                    result="Sync cancelled by user.",
                 )
             else:
-                # Sync / Update
-                res = self.git_service.sync(
-                    repo=repo,
-                    org_name=org_name,
-                    preserve_local_changes=preserve_local_changes,
-                    fetch_only=fetch_only,
-                    checkout_default=checkout_default,
-                    dry_run=dry_run,
-                )
+                repo_path = workspace / repo.name
+                repo.local_path = repo_path
+                before_status = repo.status
 
-            # Update repository state in-place based on sync results
+                if before_status == "MISSING":
+                    res = self.git_service.clone(repo, repo_path, use_ssh=use_ssh, dry_run=dry_run)
+                elif before_status in ("NOT_A_REPOSITORY", "WRONG_REMOTE", "FAILED"):
+                    res = SyncResult(
+                        repo_name=repo.name,
+                        requested_action="FETCH" if fetch_only else "SYNC",
+                        performed_action="SKIPPED",
+                        before_status=before_status,
+                        after_status=before_status,
+                        duration=0.0,
+                        result=f"Skipped due to status: {before_status}",
+                    )
+                else:
+                    res = self.git_service.sync(
+                        repo=repo,
+                        org_name=org_name,
+                        preserve_local_changes=preserve_local_changes,
+                        fetch_only=fetch_only,
+                        checkout_default=checkout_default,
+                        dry_run=dry_run,
+                    )
+
             repo.status = res.after_status
             repo.result = res.result or res.error
             repo.requested_action = res.requested_action
@@ -142,9 +160,38 @@ class SyncService:
                 repo.ahead = res.ahead
             if res.behind is not None:
                 repo.behind = res.behind
-            results.append(res)
+
+            with results_lock:
+                results.append(res)
+                completed_count += 1
+                current_completed = completed_count
 
             if progress_callback:
-                progress_callback(idx + 1, total, repo, res)
+                progress_callback(current_completed, total, repo, res)
+
+        # Run synchronization in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(sync_single, repo) for repo in repositories]
+            for _future in concurrent.futures.as_completed(futures):
+                if is_cancelled_callback and is_cancelled_callback():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
+
+        # Fill in cancellation details for tasks that did not run
+        completed_repo_names = {r.repo_name for r in results}
+        for repo in repositories:
+            if repo.name not in completed_repo_names:
+                res = SyncResult(
+                    repo_name=repo.name,
+                    requested_action="FETCH" if fetch_only else "SYNC",
+                    performed_action="CANCELLED",
+                    before_status=repo.status,
+                    after_status=repo.status,
+                    duration=0.0,
+                    result="Sync cancelled by user.",
+                )
+                results.append(res)
+                if progress_callback:
+                    progress_callback(len(results), total, repo, res)
 
         return results

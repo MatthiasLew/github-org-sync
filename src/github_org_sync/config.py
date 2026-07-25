@@ -21,6 +21,7 @@ class ConfigManager:
         "language": "pl",
         "theme": "System",
         "column_widths": [],
+        "max_workers": 4,
     }
 
     def __init__(self) -> None:

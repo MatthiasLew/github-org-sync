@@ -59,12 +59,18 @@ class SyncWorker(QThread):
         def check_cancelled() -> bool:
             return self._is_cancelled
 
+        from github_org_sync.config import ConfigManager
+
+        config = ConfigManager().load()
+        max_workers = self.options.get("max_workers", config.get("max_workers", 4))
+
         self.sync_service.check_local_statuses(
             repositories=self.repositories,
             workspace=self.workspace,
             org_name=self.org_name,
             progress_callback=local_progress,
             is_cancelled_callback=check_cancelled,
+            max_workers=max_workers,
         )
 
         if self._is_cancelled:
@@ -93,6 +99,11 @@ class SyncWorker(QThread):
         def check_cancelled() -> bool:
             return self._is_cancelled
 
+        from github_org_sync.config import ConfigManager
+
+        config = ConfigManager().load()
+        max_workers = self.options.get("max_workers", config.get("max_workers", 4))
+
         results = self.sync_service.sync_repositories(
             repositories=self.repositories,
             workspace=self.workspace,
@@ -100,6 +111,7 @@ class SyncWorker(QThread):
             options=self.options,
             progress_callback=sync_progress,
             is_cancelled_callback=check_cancelled,
+            max_workers=max_workers,
         )
 
         if self._is_cancelled:
