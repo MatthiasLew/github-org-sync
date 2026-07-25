@@ -46,7 +46,6 @@ jobs:
         run: |
           cd dist
           zip -r github-org-sync-macos-x64.zip github-org-sync
-          mv github-org-sync-macos-x64.zip ../dist/
 
       - name: Generate Checksum Hash
         run: |

@@ -159,7 +159,6 @@ jobs:
           VERSION="${{ github.ref_name }}"
           cd dist
           zip -r github-org-sync-$VERSION-macos-x64.zip github-org-sync
-          mv github-org-sync-$VERSION-macos-x64.zip ../dist/
 
       - name: Generate Checksum Hash
         run: |
