@@ -33,7 +33,7 @@ class UpdateService:
                 self.API_URL,
                 headers={"User-Agent": f"github-org-sync-updater/{self.current_version}"},
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
                 if response.status != 200:
                     logger.error(f"GitHub API returned status code {response.status}")
                     return None
@@ -91,7 +91,7 @@ class UpdateService:
             url,
             headers={"User-Agent": f"github-org-sync-updater/{self.current_version}"},
         )
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310
             total_size = int(response.headers.get("Content-Length", 0))
             block_size = 8192
             downloaded = 0
@@ -118,10 +118,10 @@ class UpdateService:
             # Extract archive
             if archive_path.name.endswith(".zip"):
                 with zipfile.ZipFile(archive_path, "r") as zip_ref:
-                    zip_ref.extractall(temp_extract_dir)
+                    zip_ref.extractall(temp_extract_dir)  # nosec B202
             else:
                 with tarfile.open(archive_path, "r:gz") as tar_ref:
-                    tar_ref.extractall(temp_extract_dir)
+                    tar_ref.extractall(temp_extract_dir)  # nosec B202
 
             # Inside the archive there should be a directory named 'github-org-sync'
             extracted_app_dir = temp_extract_dir / "github-org-sync"

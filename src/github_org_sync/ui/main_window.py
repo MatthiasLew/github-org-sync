@@ -1141,7 +1141,7 @@ class MainWindow(QMainWindow):
 
     def check_for_updates_silently(self) -> None:
         """Starts a background thread to check for updates silently on startup."""
-        if "pytest" in sys.modules:
+        if "pytest" in sys.modules or "--smoke-test" in sys.argv:
             return
         self._silent_update_worker = UpdateCheckWorker(self)
         self._silent_update_worker.finished.connect(self._on_silent_update_check_finished)
