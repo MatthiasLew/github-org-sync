@@ -71,3 +71,29 @@ def test_check_for_updates_none(mock_urlopen: MagicMock) -> None:
     service = UpdateService(current_version="1.3.1")
     result = service.check_for_updates()
     assert result is None
+
+
+@patch("github_org_sync.services.update_service.sys.exit")
+@patch("github_org_sync.utils.process.popen_process")
+@patch("pathlib.Path.open")
+def test_apply_windows(mock_open: MagicMock, mock_popen: MagicMock, mock_exit: MagicMock) -> None:
+    from pathlib import Path
+
+    mock_file = MagicMock()
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    service = UpdateService()
+    src = Path("C:/src")
+    dest = Path("C:/dest")
+
+    with patch("sys.platform", "win32"), patch("sys.executable", "C:/dest/github-org-sync.exe"):
+        service._apply_windows(src, dest)
+
+    mock_open.assert_called_once()
+    written_data = "".join(call[0][0] for call in mock_file.write.call_args_list)
+    assert "robocopy" in written_data
+    assert "tasklist" in written_data
+    assert "github-org-sync.exe" in written_data
+
+    mock_popen.assert_called_once()
+    mock_exit.assert_called_once_with(0)

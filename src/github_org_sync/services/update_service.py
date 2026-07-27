@@ -144,13 +144,31 @@ class UpdateService:
         from github_org_sync.utils.process import popen_process
 
         bat_path = Path(tempfile.gettempdir()) / "github_org_sync_update.bat"
+        exe_name = Path(sys.executable).name
+        dest_exe = dest_dir / exe_name
 
-        # Generate batch file content
-        # Note: xcopy options: /Y (suppress prompt to overwrite), /S /E (copy subdirectories), /I (assume destination is directory)
+        # Generate robust batch file content checking tasklist to ensure lock release,
+        # using robocopy /MIR with xcopy fallback.
         bat_content = f"""@echo off
-timeout /t 2 /nobreak > nul
-xcopy /Y /S /E /I "{src_dir}" "{dest_dir}"
-start "" "{dest_dir / "github-org-sync.exe"}"
+setlocal enabledelayedexpansion
+
+set "PID_CHECK={exe_name}"
+for /L %%i in (1,1,10) do (
+    tasklist /FI "IMAGENAME eq !PID_CHECK!" 2>NUL | find /I "!PID_CHECK!" >NUL
+    if !ERRORLEVEL! EQU 0 (
+        timeout /t 1 /nobreak > nul
+    ) else (
+        goto do_copy
+    )
+)
+
+:do_copy
+robocopy "{src_dir}" "{dest_dir}" /MIR /R:5 /W:1 > nul
+if !ERRORLEVEL! GEQ 8 (
+    xcopy /Y /S /E /I "{src_dir}" "{dest_dir}" > nul
+)
+
+start "" "{dest_exe}"
 del "%~f0"
 exit
 """
