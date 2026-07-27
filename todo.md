@@ -51,6 +51,7 @@ Enables writing logs to disk in a dedicated `logs` directory inside the platform
    from pathlib import Path
    from github_org_sync.services.report_service import ReportService
 
+
    def setup_logging() -> None:
        try:
            # ReportService.get_config_path() returns the config file path,
@@ -61,12 +62,8 @@ Enables writing logs to disk in a dedicated `logs` directory inside the platform
            log_file = log_dir / "app.log"
 
            # Rotating log file, max 2MB, keeping 3 old copies
-           handler = RotatingFileHandler(
-               log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8"
-           )
-           formatter = logging.Formatter(
-               "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-           )
+           handler = RotatingFileHandler(log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+           formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
            handler.setFormatter(formatter)
 
            # Add to root logger
@@ -112,6 +109,7 @@ Adds a button to launch `git mergetool` directly from the conflict resolution di
    def launch_merge_tool(self, repo_path: Path) -> None:
        """Launches the configured git mergetool asynchronously."""
        from github_org_sync.utils.process import popen_process
+
        # Spawns the tool detached so the GUI does not freeze
        popen_process(["git", "mergetool"], cwd=repo_path)
    ```
