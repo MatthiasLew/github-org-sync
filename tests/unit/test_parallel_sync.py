@@ -11,11 +11,16 @@ from github_org_sync.services.sync_service import SyncService
 @pytest.mark.unit
 def test_parallel_check_local_statuses() -> None:
     git_service_mock = MagicMock()
-    git_service_mock.get_local_status.side_effect = [
-        ("SYNCED", "main", 0, 0, "Up to date"),
-        ("BEHIND", "dev", 0, 2, "2 commits behind"),
-        ("MISSING", None, None, None, "Directory missing"),
-    ]
+
+    def mock_get_status(path, org):
+        path_str = str(path)
+        if "repo-1" in path_str:
+            return "SYNCED", "main", 0, 0, "Up to date"
+        if "repo-2" in path_str:
+            return "BEHIND", "dev", 0, 2, "2 commits behind"
+        return "MISSING", None, None, None, "Directory missing"
+
+    git_service_mock.get_local_status.side_effect = mock_get_status
 
     repos = [
         Repository(
