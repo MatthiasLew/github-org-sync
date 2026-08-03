@@ -1,5 +1,6 @@
 import sys
 import traceback
+from pathlib import Path
 from types import TracebackType
 
 from PySide6.QtWidgets import QApplication
@@ -34,7 +35,38 @@ def handle_exception(exctype: type[BaseException], value: BaseException, tb: Tra
 sys.excepthook = handle_exception
 
 
+def setup_logging(app_data_dir: Path | None = None) -> None:
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    from github_org_sync.services.report_service import ReportService
+
+    # Skip actual file logging in tests unless a custom directory is specified
+    if "pytest" in sys.modules and app_data_dir is None:
+        return
+
+    try:
+        app_dir = app_data_dir or ReportService.get_app_data_dir()
+        log_dir = app_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "app.log"
+
+        handler = RotatingFileHandler(log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        handler.setFormatter(formatter)
+
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(handler)
+
+        logging.info("Persistent file logging initialized.")
+    except Exception as e:
+        print(f"Failed to initialize file logging: {e}", file=sys.stderr)
+
+
 def main() -> None:
+    setup_logging()
+
     if "--smoke-test" in sys.argv:
         # Prevent showing GUI dialogs
         app = QApplication(sys.argv)
