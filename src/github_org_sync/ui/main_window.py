@@ -507,6 +507,10 @@ class MainWindow(QMainWindow):
         self.act_about.triggered.connect(self.show_about)
 
         self.menu_help.addSeparator()
+        self.act_diagnostics = self.menu_help.addAction("")
+        self.act_diagnostics.triggered.connect(self.show_diagnostics)
+
+        self.menu_help.addSeparator()
         self.act_check_updates = self.menu_help.addAction("")
         self.act_check_updates.triggered.connect(self.check_for_updates_manually)
 
@@ -626,6 +630,7 @@ class MainWindow(QMainWindow):
 
         self.act_getting_started.setText(_t("menu_getting_started"))
         self.act_about.setText(_t("menu_about"))
+        self.act_diagnostics.setText(_t("menu_run_diagnostics"))
         self.act_check_updates.setText(_t("menu_check_updates"))
 
         if hasattr(self, "latest_version") and self.latest_version:
@@ -1190,6 +1195,12 @@ class MainWindow(QMainWindow):
 
     def show_about(self) -> None:
         QMessageBox.information(self, _t("about_title"), _t("about_text"), QMessageBox.StandardButton.Ok)
+
+    def show_diagnostics(self) -> None:
+        from github_org_sync.ui.diagnostics_dialog import DiagnosticsDialog
+
+        dialog = DiagnosticsDialog(self)
+        dialog.exec()
 
     def check_for_updates_silently(self) -> None:
         """Starts a background thread to check for updates silently on startup."""
