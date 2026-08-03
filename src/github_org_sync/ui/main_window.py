@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -21,7 +22,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSplitter,
     QStackedWidget,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -146,6 +149,30 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.update_banner)
         self.update_banner.hide()
 
+        # QTabWidget
+        self.tabs = QTabWidget(self)
+        main_layout.addWidget(self.tabs)
+
+        # =========================================================================
+        # TAB 1: WORKSPACE & SYNC
+        # =========================================================================
+        tab_sync_widget = QWidget()
+        tab_sync_layout = QHBoxLayout(tab_sync_widget)
+        tab_sync_layout.setContentsMargins(8, 8, 8, 8)
+        tab_sync_layout.setSpacing(12)
+
+        # QSplitter to separate Left Config Card and Right Repository Panel
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # -------------------------------------------------------------------------
+        # LEFT CONFIG CARD (QGroupBox)
+        # -------------------------------------------------------------------------
+        left_card = QGroupBox()
+        left_card.setObjectName("cardContainer")
+        left_card_layout = QVBoxLayout(left_card)
+        left_card_layout.setSpacing(12)
+        left_card_layout.setContentsMargins(12, 12, 12, 12)
+
         # Mode Switch Selector Row
         self.mode_widget = QWidget(self)
         mode_layout = QHBoxLayout(self.mode_widget)
@@ -165,9 +192,8 @@ class MainWindow(QMainWindow):
         self.btn_mode_workspace.setAutoExclusive(True)
         self.btn_mode_workspace.clicked.connect(lambda: self.switch_mode("workspace"))
         mode_layout.addWidget(self.btn_mode_workspace)
-
         mode_layout.addStretch()
-        main_layout.addWidget(self.mode_widget)
+        left_card_layout.addWidget(self.mode_widget)
 
         # Workspace Path Selector (Common to both modes)
         ws_widget = QWidget(self)
@@ -184,8 +210,7 @@ class MainWindow(QMainWindow):
         self.btn_choose_dir.setObjectName("btnOutline")
         self.btn_choose_dir.clicked.connect(self.choose_workspace)
         ws_layout.addWidget(self.btn_choose_dir, 0, 2)
-
-        main_layout.addWidget(ws_widget)
+        left_card_layout.addWidget(ws_widget)
 
         # Stacked Panel
         self.stacked_widget = QStackedWidget(self)
@@ -223,9 +248,9 @@ class MainWindow(QMainWindow):
 
         # Options Box
         self.options_widget = QWidget(self)
-        options_layout = QHBoxLayout(self.options_widget)
+        options_layout = QVBoxLayout(self.options_widget)
         options_layout.setContentsMargins(0, 4, 0, 4)
-        options_layout.setSpacing(15)
+        options_layout.setSpacing(8)
 
         self.cb_include_archived = QCheckBox(self)
         self.cb_include_forks = QCheckBox(self)
@@ -243,7 +268,6 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self.cb_fetch_only)
         options_layout.addWidget(self.cb_dry_run)
         options_layout.addWidget(self.cb_follow)
-        options_layout.addStretch()
 
         page_clone_layout.addWidget(self.options_widget)
         self.stacked_widget.addWidget(page_clone)
@@ -294,8 +318,7 @@ class MainWindow(QMainWindow):
 
         page_ws_layout.addWidget(ws_grid)
         self.stacked_widget.addWidget(page_ws)
-
-        main_layout.addWidget(self.stacked_widget)
+        left_card_layout.addWidget(self.stacked_widget)
 
         # Selection Control Row
         selection_widget = QWidget(self)
@@ -323,43 +346,20 @@ class MainWindow(QMainWindow):
         sel_layout.addWidget(self.btn_sel_none)
         sel_layout.addWidget(self.btn_sel_missing)
         sel_layout.addWidget(self.btn_sel_outdated)
-        sel_layout.addStretch()
-
-        main_layout.addWidget(selection_widget)
-
-        # Search & Filter Row
-        filter_widget = QWidget(self)
-        filter_layout = QHBoxLayout(filter_widget)
-        filter_layout.setContentsMargins(0, 0, 0, 0)
-        filter_layout.setSpacing(10)
-
-        self.search_input = QLineEdit(self)
-        self.search_input.textChanged.connect(self.apply_table_filters)
-        filter_layout.addWidget(self.search_input)
-
-        self.status_filter_cb = QComboBox(self)
-        self.status_filter_cb.currentTextChanged.connect(self.apply_table_filters)
-        filter_layout.addWidget(self.status_filter_cb)
-
-        filter_layout.addStretch()
-        main_layout.addWidget(filter_widget)
-
-        # Repositories Table
-        self.table = RepositoryTable(self)
-        main_layout.addWidget(self.table)
+        left_card_layout.addWidget(selection_widget)
 
         # Progress Section
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat("Progress: %v/%m (%p%)")
-        main_layout.addWidget(self.progress_bar)
+        left_card_layout.addWidget(self.progress_bar)
 
         # Operations Buttons Row
         operations_widget = QWidget(self)
         ops_layout = QHBoxLayout(operations_widget)
         ops_layout.setContentsMargins(0, 0, 0, 0)
-        ops_layout.setSpacing(10)
+        ops_layout.setSpacing(8)
 
         self.btn_sync = QPushButton(self)
         self.btn_sync.setObjectName("btnAction")
@@ -387,9 +387,55 @@ class MainWindow(QMainWindow):
         self.btn_open_ws.setObjectName("btnOutline")
         self.btn_open_ws.clicked.connect(self.open_workspace_folder)
         ops_layout.addWidget(self.btn_open_ws)
+        left_card_layout.addWidget(operations_widget)
 
-        ops_layout.addStretch()
-        main_layout.addWidget(operations_widget)
+        left_card_layout.addStretch()
+        splitter.addWidget(left_card)
+
+        # -------------------------------------------------------------------------
+        # RIGHT MAIN PANEL: REPOSITORIES
+        # -------------------------------------------------------------------------
+        repos_widget = QWidget()
+        repos_layout = QVBoxLayout(repos_widget)
+        repos_layout.setContentsMargins(0, 0, 0, 0)
+        repos_layout.setSpacing(10)
+
+        # Search & Filter Row
+        filter_widget = QWidget(self)
+        filter_layout = QHBoxLayout(filter_widget)
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_layout.setSpacing(10)
+
+        self.search_input = QLineEdit(self)
+        self.search_input.textChanged.connect(self.apply_table_filters)
+        filter_layout.addWidget(self.search_input)
+
+        self.status_filter_cb = QComboBox(self)
+        self.status_filter_cb.currentTextChanged.connect(self.apply_table_filters)
+        filter_layout.addWidget(self.status_filter_cb)
+
+        repos_layout.addWidget(filter_widget)
+
+        # Repositories Table
+        self.table = RepositoryTable(self)
+        repos_layout.addWidget(self.table)
+
+        splitter.addWidget(repos_widget)
+
+        # Adjust initial splitter widget ratios
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+
+        tab_sync_layout.addWidget(splitter)
+        self.tabs.addTab(tab_sync_widget, "")
+
+        # =========================================================================
+        # TAB 2: LOG CONSOLE
+        # =========================================================================
+        tab_log_widget = QWidget()
+        tab_log_layout = QVBoxLayout(tab_log_widget)
+        tab_log_layout.setContentsMargins(8, 8, 8, 8)
+        tab_log_layout.setSpacing(10)
 
         # Labeled Logs Panel
         log_header_widget = QWidget(self)
@@ -404,7 +450,7 @@ class MainWindow(QMainWindow):
         self.btn_clear_log.setObjectName("btnOutline")
         self.btn_clear_log.clicked.connect(self.console_log_clear)
         log_header_layout.addWidget(self.btn_clear_log)
-        main_layout.addWidget(log_header_widget)
+        tab_log_layout.addWidget(log_header_widget)
 
         # Monospaced Console Log
         self.console_log = QTextEdit(self)
@@ -412,7 +458,9 @@ class MainWindow(QMainWindow):
         self.console_log.setReadOnly(True)
         self.console_log.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.console_log.customContextMenuRequested.connect(self._show_log_context_menu)
-        main_layout.addWidget(self.console_log)
+        tab_log_layout.addWidget(self.console_log)
+
+        self.tabs.addTab(tab_log_widget, "")
 
         # Setup Menu Bar
         self._setup_menu_bar()
@@ -561,6 +609,10 @@ class MainWindow(QMainWindow):
         self.btn_clear_log.setText(_t("btn_clear_log"))
         self.btn_clear_log.setToolTip(_t("tip_clear_btn"))
         self.console_log.setPlaceholderText(_t("col_result") + "...")
+
+        # Tab Headers
+        self.tabs.setTabText(0, _t("tab_sync"))
+        self.tabs.setTabText(1, _t("tab_logs"))
 
         # Menu Titles
         self.menu_settings.setTitle(_t("menu_settings"))

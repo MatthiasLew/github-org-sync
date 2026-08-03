@@ -239,6 +239,43 @@ DARK_STYLESHEET = """
         border-color: #3b82f6;
         background-color: #3b82f6;
     }
+
+    /* Tab Widget & Bar */
+    QTabWidget::pane {
+        border: 1px solid #1e293b;
+        background-color: #0f172a;
+        border-radius: 8px;
+    }
+
+    QTabBar::tab {
+        background-color: #1e293b;
+        color: #94a3b8;
+        padding: 8px 16px;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        margin-right: 4px;
+        font-weight: 600;
+    }
+
+    QTabBar::tab:hover {
+        background-color: #334155;
+        color: #f8fafc;
+    }
+
+    QTabBar::tab:selected {
+        background-color: #0f172a;
+        color: #3b82f6;
+        border-bottom: 2px solid #3b82f6;
+    }
+
+    /* Group Box Card Container */
+    QGroupBox#cardContainer {
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        background-color: #1e293b;
+        padding: 16px;
+        margin-top: 10px;
+    }
 """
 
 LIGHT_STYLESHEET = """
@@ -477,6 +514,43 @@ LIGHT_STYLESHEET = """
     QCheckBox::indicator:checked {
         border-color: #3b82f6;
         background-color: #3b82f6;
+    }
+
+    /* Tab Widget & Bar */
+    QTabWidget::pane {
+        border: 1px solid #cbd5e1;
+        background-color: #f8fafc;
+        border-radius: 8px;
+    }
+
+    QTabBar::tab {
+        background-color: #cbd5e1;
+        color: #475569;
+        padding: 8px 16px;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        margin-right: 4px;
+        font-weight: 600;
+    }
+
+    QTabBar::tab:hover {
+        background-color: #cbd5e1;
+        color: #0f172a;
+    }
+
+    QTabBar::tab:selected {
+        background-color: #f8fafc;
+        color: #3b82f6;
+        border-bottom: 2px solid #3b82f6;
+    }
+
+    /* Group Box Card Container */
+    QGroupBox#cardContainer {
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background-color: #ffffff;
+        padding: 16px;
+        margin-top: 10px;
     }
 """
 
