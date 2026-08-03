@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from github_org_sync.i18n import _t
 from github_org_sync.models.repository import Repository
-from github_org_sync.utils.process import run_process
+from github_org_sync.utils.process import open_terminal, run_process
 
 
 class CheckboxTableWidgetItem(QTableWidgetItem):
@@ -494,6 +494,14 @@ class RepositoryTable(QTableWidget):
         act_open_folder.triggered.connect(lambda: self._open_folder(Path(repo.local_path)) if repo.local_path else None)
         menu.addAction(act_open_folder)
 
+        # Context action 1.5: Open in terminal
+        act_open_terminal = QAction(_t("ctx_open_terminal"), self)
+        act_open_terminal.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_open_terminal.triggered.connect(
+            lambda: self._open_terminal(Path(repo.local_path)) if repo.local_path else None
+        )
+        menu.addAction(act_open_terminal)
+
         # Context action 2: Open Remote repo page
         host = getattr(repo, "computed_hosting", "GitHub") if hasattr(repo, "computed_hosting") else "GitHub"
         if host == "GitHub":
@@ -583,6 +591,13 @@ class RepositoryTable(QTableWidget):
                 run_process(["open", str(path)], check=True)
             else:
                 run_process(["xdg-open", str(path)], check=True)
+        except Exception as e:
+            QMessageBox.warning(self, _t("error_open_title"), _t("error_open_msg", error=str(e)))
+
+    def _open_terminal(self, path: Path) -> None:
+        try:
+            if not open_terminal(path):
+                raise RuntimeError("Could not find or launch terminal emulator.")
         except Exception as e:
             QMessageBox.warning(self, _t("error_open_title"), _t("error_open_msg", error=str(e)))
 
