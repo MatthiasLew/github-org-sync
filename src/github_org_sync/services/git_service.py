@@ -807,3 +807,15 @@ class GitService:
             return res.returncode == 0, out
         except Exception as e:
             return False, str(e)
+
+    def get_log_graph(self, repo_path: Path, limit: int = 25, all_branches: bool = True) -> str:
+        """Returns visual git log graph string using git log --graph."""
+        try:
+            cmd = ["log", "--graph", "--oneline", "--decorate"]
+            if all_branches:
+                cmd.append("--all")
+            cmd.extend(["-n", str(limit)])
+            res = self._run_git(repo_path, cmd)
+            return res.stdout.strip() if res.returncode == 0 else (res.stderr or "").strip()
+        except Exception as e:
+            return str(e)

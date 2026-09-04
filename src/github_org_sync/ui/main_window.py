@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -462,6 +462,62 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(tab_log_widget, "")
 
+        # =========================================================================
+        # TAB 3: GIT HISTORY GRAPH
+        # =========================================================================
+        tab_graph_widget = QWidget()
+        tab_graph_layout = QVBoxLayout(tab_graph_widget)
+        tab_graph_layout.setContentsMargins(8, 8, 8, 8)
+        tab_graph_layout.setSpacing(10)
+
+        graph_header_widget = QWidget(self)
+        graph_header_layout = QHBoxLayout(graph_header_widget)
+        graph_header_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.label_graph_repo = QLabel(self)
+        graph_header_layout.addWidget(self.label_graph_repo)
+
+        self.graph_repo_combo = QComboBox(self)
+        self.graph_repo_combo.currentIndexChanged.connect(self._on_graph_repo_changed)
+        graph_header_layout.addWidget(self.graph_repo_combo)
+
+        graph_header_layout.addSpacing(10)
+        self.label_graph_limit = QLabel(self)
+        graph_header_layout.addWidget(self.label_graph_limit)
+
+        self.graph_limit_combo = QComboBox(self)
+        for lim in ("25", "50", "100", "200"):
+            self.graph_limit_combo.addItem(lim)
+        self.graph_limit_combo.currentTextChanged.connect(self.refresh_git_graph)
+        graph_header_layout.addWidget(self.graph_limit_combo)
+
+        graph_header_layout.addSpacing(10)
+        self.graph_all_branches_cb = QCheckBox(self)
+        self.graph_all_branches_cb.setChecked(True)
+        self.graph_all_branches_cb.stateChanged.connect(self.refresh_git_graph)
+        graph_header_layout.addWidget(self.graph_all_branches_cb)
+
+        graph_header_layout.addStretch()
+
+        self.btn_refresh_graph = QPushButton(self)
+        self.btn_refresh_graph.setObjectName("btnOutline")
+        self.btn_refresh_graph.clicked.connect(self.refresh_git_graph)
+        graph_header_layout.addWidget(self.btn_refresh_graph)
+
+        tab_graph_layout.addWidget(graph_header_widget)
+
+        self.graph_console = QTextEdit(self)
+        self.graph_console.setObjectName("consoleLog")
+        self.graph_console.setReadOnly(True)
+        self.graph_console.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        font = QFont("Consolas, Courier New, monospace")
+        font.setStyleHint(QFont.StyleHint.Monospace)
+        font.setPointSize(10)
+        self.graph_console.setFont(font)
+        tab_graph_layout.addWidget(self.graph_console)
+
+        self.tabs.addTab(tab_graph_widget, "")
+
         # Setup Menu Bar
         self._setup_menu_bar()
 
@@ -617,6 +673,12 @@ class MainWindow(QMainWindow):
         # Tab Headers
         self.tabs.setTabText(0, _t("tab_sync"))
         self.tabs.setTabText(1, _t("tab_logs"))
+        self.tabs.setTabText(2, _t("tab_graph"))
+        self.label_graph_repo.setText(_t("graph_repo_label"))
+        self.label_graph_limit.setText(_t("graph_limit_label"))
+        self.graph_all_branches_cb.setText(_t("graph_all_branches"))
+        self.btn_refresh_graph.setText(_t("btn_refresh_graph"))
+        self.graph_console.setPlaceholderText(_t("graph_empty"))
 
         # Menu Titles
         self.menu_settings.setTitle(_t("menu_settings"))
@@ -797,6 +859,45 @@ class MainWindow(QMainWindow):
     def console_log_clear(self) -> None:
         self.console_log.clear()
         self.log("Log cleared.")
+
+    def _update_graph_repo_list(self) -> None:
+        curr = self.graph_repo_combo.currentText()
+        self.graph_repo_combo.blockSignals(True)
+        self.graph_repo_combo.clear()
+        cloned = [r.name for r in self.repositories if r.local_path and Path(r.local_path).exists()]
+        for name in cloned:
+            self.graph_repo_combo.addItem(name)
+        if curr and self.graph_repo_combo.findText(curr) >= 0:
+            self.graph_repo_combo.setCurrentText(curr)
+        self.graph_repo_combo.blockSignals(False)
+
+    def _on_graph_repo_changed(self) -> None:
+        self.refresh_git_graph()
+
+    def refresh_git_graph(self) -> None:
+        repo_name = self.graph_repo_combo.currentText()
+        if not repo_name:
+            self.graph_console.setPlainText(_t("graph_no_repo"))
+            return
+        repo = next((r for r in self.repositories if r.name == repo_name), None)
+        if not repo or not repo.local_path or not Path(repo.local_path).exists():
+            self.graph_console.setPlainText(_t("graph_no_repo"))
+            return
+        try:
+            limit = int(self.graph_limit_combo.currentText())
+        except ValueError:
+            limit = 25
+        all_b = self.graph_all_branches_cb.isChecked()
+        graph_text = self.git_service.get_log_graph(Path(repo.local_path), limit=limit, all_branches=all_b)
+        self.graph_console.setPlainText(graph_text or _t("graph_empty"))
+
+    def show_repo_git_graph(self, repo_name: str) -> None:
+        self._update_graph_repo_list()
+        idx = self.graph_repo_combo.findText(repo_name)
+        if idx >= 0:
+            self.graph_repo_combo.setCurrentIndex(idx)
+        self.tabs.setCurrentIndex(2)
+        self.refresh_git_graph()
 
     def choose_workspace(self) -> None:
         current_dir = self.workspace_input.text().strip() or str(Path.home())

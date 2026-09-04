@@ -270,3 +270,24 @@ def test_prune_dialog_flow(qtbot: Any) -> None:
         dialog._on_delete_selected()
 
     assert mock_git.delete_local_branch.call_count == 2
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_log_graph_dialog_flow(qtbot: Any) -> None:
+    from github_org_sync.services.git_service import GitService
+    from github_org_sync.ui.graph_dialog import LogGraphDialog
+
+    repo = Repository("test-repo", "url", "ssh", status="UP_TO_DATE")
+    repo.local_path = Path("/dummy")
+    mock_git = MagicMock(spec=GitService)
+    mock_git.get_log_graph.return_value = "* 1234abc (HEAD -> main) Add feature"
+
+    dialog = LogGraphDialog(repo, mock_git)
+    qtbot.addWidget(dialog)
+
+    assert "* 1234abc" in dialog.graph_view.toPlainText()
+    mock_git.get_log_graph.assert_called_with(Path("/dummy"), limit=25, all_branches=True)
+
+    dialog.limit_combo.setCurrentText("50")
+    mock_git.get_log_graph.assert_called_with(Path("/dummy"), limit=50, all_branches=True)

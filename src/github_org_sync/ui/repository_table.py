@@ -570,6 +570,12 @@ class RepositoryTable(QTableWidget):
         act_prune.triggered.connect(lambda: self._prune_branches(repo))
         menu.addAction(act_prune)
 
+        # Context action 9: View Git Log Graph
+        act_graph = QAction(_t("ctx_view_log_graph"), self)
+        act_graph.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_graph.triggered.connect(lambda: self._view_git_graph(repo))
+        menu.addAction(act_graph)
+
         menu.exec(self.viewport().mapToGlobal(pos))
 
     def _copy_cell(self, row: int, col: int) -> None:
@@ -770,6 +776,21 @@ class RepositoryTable(QTableWidget):
                     row, self._col("col_behind"), NumericTableWidgetItem(str(behind) if behind is not None else "")
                 )
                 break
+
+    def _view_git_graph(self, repo: Repository) -> None:
+        from github_org_sync.ui.graph_dialog import LogGraphDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        if repo.local_path is None:
+            return
+
+        dialog = LogGraphDialog(repo, git_service, self)
+        dialog.exec()
 
     def _open_folder(self, path: Path) -> None:
         try:

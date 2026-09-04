@@ -446,3 +446,15 @@ def test_delete_local_branch(mock_run: MagicMock, git_service: GitService) -> No
     assert ok is True
     assert "Deleted branch old-feat" in out
     mock_run.assert_called_with(Path("/dummy"), ["branch", "-D", "old-feat"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_get_log_graph(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="* 1234abc (HEAD -> main) Initial commit\n", stderr="")
+    graph = git_service.get_log_graph(Path("/dummy"), limit=10, all_branches=True)
+    assert "* 1234abc" in graph
+    mock_run.assert_called_with(
+        Path("/dummy"),
+        ["log", "--graph", "--oneline", "--decorate", "--all", "-n", "10"],
+    )
