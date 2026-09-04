@@ -370,3 +370,35 @@ def test_get_staged_and_unstaged_files(mock_dirty: MagicMock, git_service: GitSe
     assert staged == ["staged.txt", "both.txt"]
     assert unstaged == ["unstaged.txt", "untracked.txt", "both.txt"]
 
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_get_stash_list_and_show(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="stash@{0}: WIP on main\nstash@{1}: test stash\n")
+    stashes = git_service.get_stash_list(Path("/dummy"))
+    assert len(stashes) == 2
+    assert stashes[0] == "stash@{0}: WIP on main"
+
+    mock_run.return_value = MagicMock(returncode=0, stdout="file.py | 2 +-")
+    show = git_service.get_stash_show(Path("/dummy"), 0)
+    assert "file.py" in show
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_stash_push_pop_drop(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="Saved working directory", stderr="")
+    ok, _ = git_service.stash_push(Path("/dummy"), "my stash")
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["stash", "push", "--include-untracked", "-m", "my stash"])
+
+    mock_run.return_value = MagicMock(returncode=0, stdout="Dropped stash@{0}", stderr="")
+    ok, _ = git_service.stash_drop(Path("/dummy"), 0)
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["stash", "drop", "stash@{0}"])
+
+    mock_run.return_value = MagicMock(returncode=0, stdout="Applied stash@{0}", stderr="")
+    ok, _ = git_service.stash_pop(Path("/dummy"), 0)
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["stash", "pop", "stash@{0}"])
+

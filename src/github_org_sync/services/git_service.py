@@ -695,3 +695,48 @@ class GitService:
         except Exception:
             return [], []
 
+    def get_stash_list(self, repo_path: Path) -> list[str]:
+        """Returns list of stash descriptions from git stash list."""
+        try:
+            res = self._run_git(repo_path, ["stash", "list"])
+            return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+        except Exception:
+            return []
+
+    def get_stash_show(self, repo_path: Path, index: int = 0) -> str:
+        """Returns stat summary of a specific stash entry."""
+        try:
+            res = self._run_git(repo_path, ["stash", "show", f"stash@{{{index}}}"])
+            return res.stdout.strip()
+        except Exception:
+            return ""
+
+    def stash_push(self, repo_path: Path, message: str = "", include_untracked: bool = True) -> tuple[bool, str]:
+        """Creates a new stash entry."""
+        try:
+            cmd = ["stash", "push"]
+            if include_untracked:
+                cmd.append("--include-untracked")
+            if message:
+                cmd.extend(["-m", message])
+            res = self._run_git(repo_path, cmd)
+            return res.returncode == 0, (res.stdout + res.stderr).strip()
+        except Exception as e:
+            return False, str(e)
+
+    def stash_pop(self, repo_path: Path, index: int = 0) -> tuple[bool, str]:
+        """Pops a stash entry from the stack."""
+        try:
+            res = self._run_git(repo_path, ["stash", "pop", f"stash@{{{index}}}"])
+            return res.returncode == 0, (res.stdout + res.stderr).strip()
+        except Exception as e:
+            return False, str(e)
+
+    def stash_drop(self, repo_path: Path, index: int = 0) -> tuple[bool, str]:
+        """Drops a stash entry from the stack."""
+        try:
+            res = self._run_git(repo_path, ["stash", "drop", f"stash@{{{index}}}"])
+            return res.returncode == 0, (res.stdout + res.stderr).strip()
+        except Exception as e:
+            return False, str(e)
+

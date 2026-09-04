@@ -210,3 +210,27 @@ def test_commit_dialog_flow(qtbot: Any) -> None:
 
     assert dialog.committed is True
     mock_git.commit_changes.assert_called_once_with(Path("/dummy"), "test commit")
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_stash_dialog_flow(qtbot: Any) -> None:
+    from github_org_sync.services.git_service import GitService
+    from github_org_sync.ui.stash_dialog import StashDialog
+
+    repo = Repository("test-repo", "url", "ssh", status="DIRTY")
+    repo.local_path = Path("/dummy")
+    mock_git = MagicMock(spec=GitService)
+    mock_git.get_stash_list.return_value = ["stash@{0}: WIP on main", "stash@{1}: test stash"]
+    mock_git.get_stash_show.return_value = "file.py | 2 +-"
+    mock_git.stash_pop.return_value = (True, "Applied stash@{0}")
+
+    dialog = StashDialog(repo, mock_git)
+    qtbot.addWidget(dialog)
+
+    assert dialog.stash_list.count() == 2
+    assert "file.py" in dialog.details_area.toPlainText()
+
+    with patch("PySide6.QtWidgets.QMessageBox.information"):
+        dialog._on_pop()
+    mock_git.stash_pop.assert_called_once_with(Path("/dummy"), 0)

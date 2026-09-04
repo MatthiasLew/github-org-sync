@@ -12,7 +12,7 @@ Below is the list of new proposed enhancements and feature ideas for the **githu
 *   **Cross-platform Support**: Runs standard `git add`, `git reset`, and `git commit` commands using safe subprocess execution.
 
 ### 2. Git Stash Drawer / Visual Manager
-*   **Status**: :pause_button: **TODO**
+*   **Status**: :white_check_mark: **DONE**
 *   **Description**: Exposes a stash panel displaying the repository's stash stack (`git stash list`) and provides buttons to manually push (stash changes), pop, or drop stashes.
 *   **Cross-platform Support**: Implements Git stash commands uniformly across all operating systems.
 

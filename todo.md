@@ -21,7 +21,7 @@ Enables developers to stage/unstage individual files inside dirty repositories a
 
 ---
 
-## 2. Git Stash Drawer / Visual Manager
+## 2. Git Stash Drawer / Visual Manager [COMPLETED]
 
 ### Description
 Displays the repository's stash stack and provides push/pop/drop actions.
