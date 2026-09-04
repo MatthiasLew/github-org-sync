@@ -458,3 +458,26 @@ def test_get_log_graph(mock_run: MagicMock, git_service: GitService) -> None:
         Path("/dummy"),
         ["log", "--graph", "--oneline", "--decorate", "--all", "-n", "10"],
     )
+
+
+@pytest.mark.unit
+def test_detect_lfs(tmp_path: Path, git_service: GitService) -> None:
+    assert git_service.detect_lfs(tmp_path) is False
+
+    (tmp_path / ".gitattributes").write_text("*.psd filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8")
+    assert git_service.detect_lfs(tmp_path) is True
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_get_lfs_status(mock_run: MagicMock, tmp_path: Path, git_service: GitService) -> None:
+    (tmp_path / ".gitattributes").write_text("*.bin filter=lfs\n", encoding="utf-8")
+    cp_ls = MagicMock(returncode=0, stdout="d123456789 * asset.bin\n", stderr="")
+    cp_status = MagicMock(returncode=0, stdout="Objects to be committed:\n\tasset.bin (Git LFS: 100%)\n", stderr="")
+    mock_run.side_effect = [cp_ls, cp_status]
+
+    info = git_service.get_lfs_status(tmp_path)
+    assert info["has_lfs"] is True
+    assert len(info["files"]) == 1
+    assert "asset.bin" in info["files"][0]
+    assert "Objects to be committed" in info["status"]

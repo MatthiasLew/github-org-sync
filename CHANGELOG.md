@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-09-04
+
+### Added
+- **Git LFS Status Monitor**: Complete Git Large File Storage (LFS) integration. Automatically detects LFS usage via configuration attributes and file tracking (`detect_lfs`). Renders color-coded `[LFS]` badges in the repository table status column. Provides a dedicated inspection dialog (`LfsDialog`) with tracked file listings (`git lfs ls-files`) and pointer working tree status (`git lfs status`). Adds Git LFS installation checks to Environment Diagnostics.
+
 ## [1.8.0] - 2026-09-04
 
 ### Added

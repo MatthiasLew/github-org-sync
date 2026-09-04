@@ -4,6 +4,7 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
@@ -819,3 +820,51 @@ class GitService:
             return res.stdout.strip() if res.returncode == 0 else (res.stderr or "").strip()
         except Exception as e:
             return str(e)
+
+    def detect_lfs(self, repo_path: Path) -> bool:
+        """Fast check if repository uses Git LFS (via .gitattributes or .lfsconfig)."""
+        try:
+            attr_file = repo_path / ".gitattributes"
+            if attr_file.is_file():
+                content = attr_file.read_text(encoding="utf-8", errors="ignore")
+                if "filter=lfs" in content:
+                    return True
+            return bool((repo_path / ".lfsconfig").is_file())
+        except Exception:
+            return False
+
+    def get_lfs_status(self, repo_path: Path) -> dict[str, Any]:
+        """Runs git lfs status and git lfs ls-files to inspect repository LFS usage."""
+        has_lfs = self.detect_lfs(repo_path)
+        files: list[str] = []
+        status_text = ""
+        error: str | None = None
+
+        try:
+            # 1. Run git lfs ls-files
+            res_ls = self._run_git(repo_path, ["lfs", "ls-files"])
+            if res_ls.returncode == 0:
+                for line in res_ls.stdout.splitlines():
+                    cleaned = line.strip()
+                    if cleaned:
+                        files.append(cleaned)
+                if files:
+                    has_lfs = True
+            elif "not a git command" in (res_ls.stderr or ""):
+                error = "Git LFS is not installed on system."
+
+            # 2. Run git lfs status
+            res_status = self._run_git(repo_path, ["lfs", "status"])
+            if res_status.returncode == 0:
+                status_text = res_status.stdout.strip()
+            elif not error:
+                status_text = (res_status.stderr or "").strip()
+        except Exception as e:
+            error = str(e)
+
+        return {
+            "has_lfs": has_lfs,
+            "files": files,
+            "status": status_text,
+            "error": error,
+        }

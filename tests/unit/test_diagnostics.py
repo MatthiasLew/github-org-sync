@@ -11,7 +11,9 @@ from github_org_sync.ui.diagnostics_dialog import DiagnosticsDialog
 def test_diagnostics_service_all_success() -> None:
     def fake_run_process(args, **kwargs):
         mock_res = MagicMock()
-        if args[0] == "git":
+        if args[0] == "git" and len(args) > 1 and args[1] == "lfs":
+            mock_res.stdout = "git-lfs/3.7.1\n"
+        elif args[0] == "git":
             mock_res.stdout = "git version 2.40.1.windows.1\n"
         elif args[0] == "gh" and args[1] == "--version":
             mock_res.stdout = "gh version 2.29.0 (2023-05-18)\n"
@@ -27,11 +29,12 @@ def test_diagnostics_service_all_success() -> None:
 
     with patch("github_org_sync.services.diagnostics_service.run_process", side_effect=fake_run_process):
         results = DiagnosticsService.run_all_checks()
-        assert len(results) == 4
+        assert len(results) == 5
         assert all(r.success for r in results)
         assert results[0].message == "git version 2.40.1.windows.1"
         assert results[1].message == "gh version 2.29.0 (2023-05-18)"
         assert "subactor" in results[3].message
+        assert results[4].message == "git-lfs/3.7.1"
 
 
 @pytest.mark.unit
@@ -41,7 +44,7 @@ def test_diagnostics_service_all_failure() -> None:
 
     with patch("github_org_sync.services.diagnostics_service.run_process", side_effect=fake_run_process):
         results = DiagnosticsService.run_all_checks()
-        assert len(results) == 4
+        assert len(results) == 5
         assert not any(r.success for r in results)
 
 

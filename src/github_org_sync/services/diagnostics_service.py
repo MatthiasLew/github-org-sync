@@ -106,4 +106,19 @@ class DiagnosticsService:
                 )
             )
 
+        # 5. Git LFS installation check
+        try:
+            res_lfs = run_process(["git", "lfs", "version"], check=True)
+            lfs_ver = res_lfs.stdout.splitlines()[0].strip() if res_lfs.stdout else "Git LFS"
+            results.append(DiagnosticsResult("lfs", "Git LFS Installation", True, lfs_ver))
+        except Exception as e:
+            results.append(
+                DiagnosticsResult(
+                    "lfs",
+                    "Git LFS Installation",
+                    False,
+                    f"Git LFS is not installed or not found on PATH: {e}",
+                )
+            )
+
         return results

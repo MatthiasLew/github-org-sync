@@ -198,9 +198,15 @@ class RepositoryTable(QTableWidget):
             self.setItem(idx, self._col("col_archived"), QTableWidgetItem(arch_text))
 
             # Column 5: Local Status
-            status_item = QTableWidgetItem(_t(f"state_{repo.status}"))
+            st_text = _t(f"state_{repo.status}")
+            if getattr(repo, "has_lfs", False):
+                st_text = f"{st_text} [LFS]"
+            status_item = QTableWidgetItem(st_text)
             self._style_status_item(status_item, repo.status)
-            status_item.setToolTip(status_item.text())
+            if getattr(repo, "has_lfs", False):
+                status_item.setToolTip(f"{st_text} - {_t('lfs_badge_tooltip')}")
+            else:
+                status_item.setToolTip(status_item.text())
             self.setItem(idx, self._col("col_status"), status_item)
 
             # Column 6: Branch
@@ -268,9 +274,15 @@ class RepositoryTable(QTableWidget):
                         # Update status item
                         status_item = self.item(row, self._col("col_status"))
                         if status_item:
-                            status_item.setText(_t(f"state_{status}"))
+                            st_text = _t(f"state_{status}")
+                            if getattr(repo, "has_lfs", False):
+                                st_text = f"{st_text} [LFS]"
+                            status_item.setText(st_text)
                             self._style_status_item(status_item, status)
-                            status_item.setToolTip(status_item.text())
+                            if getattr(repo, "has_lfs", False):
+                                status_item.setToolTip(f"{st_text} - {_t('lfs_badge_tooltip')}")
+                            else:
+                                status_item.setToolTip(status_item.text())
 
                         # Update action item
                         action_item = self.item(row, self._col("col_action"))
@@ -576,6 +588,12 @@ class RepositoryTable(QTableWidget):
         act_graph.triggered.connect(lambda: self._view_git_graph(repo))
         menu.addAction(act_graph)
 
+        # Context action 10: Git LFS Status
+        act_lfs = QAction(_t("ctx_lfs_status"), self)
+        act_lfs.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_lfs.triggered.connect(lambda: self._view_lfs_status(repo))
+        menu.addAction(act_lfs)
+
         menu.exec(self.viewport().mapToGlobal(pos))
 
     def _copy_cell(self, row: int, col: int) -> None:
@@ -790,6 +808,21 @@ class RepositoryTable(QTableWidget):
             return
 
         dialog = LogGraphDialog(repo, git_service, self)
+        dialog.exec()
+
+    def _view_lfs_status(self, repo: Repository) -> None:
+        from github_org_sync.ui.lfs_dialog import LfsDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        if repo.local_path is None:
+            return
+
+        dialog = LfsDialog(repo, git_service, self)
         dialog.exec()
 
     def _open_folder(self, path: Path) -> None:

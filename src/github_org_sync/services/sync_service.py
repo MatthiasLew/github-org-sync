@@ -65,6 +65,7 @@ class SyncService:
             repo.requested_action = None
             repo.performed_action = None
             repo.result = msg
+            repo.has_lfs = self.git_service.detect_lfs(repo_path)
 
             with completed_lock:
                 completed_count += 1
@@ -168,6 +169,7 @@ class SyncService:
                 repo.ahead = res.ahead
             if res.behind is not None:
                 repo.behind = res.behind
+            repo.has_lfs = self.git_service.detect_lfs(repo_path)
 
             with results_lock:
                 results[idx] = res

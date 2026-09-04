@@ -25,3 +25,4 @@ class Repository:
     # Custom grouping attributes
     computed_hosting: str = "GitHub"
     computed_owner: str = "No remote"
+    has_lfs: bool = False

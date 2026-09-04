@@ -72,7 +72,7 @@ Renders a readable monospaced layout displaying a visual representation of the b
 
 ---
 
-## 5. Git LFS Status Monitor
+## 5. Git LFS Status Monitor [COMPLETED]
 
 ### Description
 Checks if a repository uses Git Large File Storage (LFS) and reports missing files or LFS tracking status.

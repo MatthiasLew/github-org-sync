@@ -291,3 +291,27 @@ def test_log_graph_dialog_flow(qtbot: Any) -> None:
 
     dialog.limit_combo.setCurrentText("50")
     mock_git.get_log_graph.assert_called_with(Path("/dummy"), limit=50, all_branches=True)
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_lfs_dialog_flow(qtbot: Any) -> None:
+    from github_org_sync.services.git_service import GitService
+    from github_org_sync.ui.lfs_dialog import LfsDialog
+
+    repo = Repository("test-repo", "url", "ssh", status="UP_TO_DATE", has_lfs=True)
+    repo.local_path = Path("/dummy")
+    mock_git = MagicMock(spec=GitService)
+    mock_git.get_lfs_status.return_value = {
+        "has_lfs": True,
+        "files": ["model.onnx", "dataset.zip"],
+        "status": "Git LFS objects: 2 committed",
+        "error": None,
+    }
+
+    dialog = LfsDialog(repo, mock_git)
+    qtbot.addWidget(dialog)
+
+    assert dialog.files_list.count() == 2
+    assert "Git LFS objects" in dialog.status_view.toPlainText()
+    mock_git.get_lfs_status.assert_called_once_with(Path("/dummy"))
