@@ -4,6 +4,14 @@
 
 ![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
+## Latest Features (v1.4 - v1.9)
+- **Git LFS Status Monitor (v1.9.0)**: Automatic LFS detection, `[LFS]` badges, and interactive inspection dialog (`git lfs ls-files` / `git lfs status`).
+- **Visual History Log Graph (v1.8.0)**: Interactive commit history tree tab and dialog with ASCII branching graphs (`git log --graph --oneline --decorate --all`).
+- **Prune Stale Branches (v1.7.0)**: Identify and clean up remote-pruned tracking refs (`git remote prune origin`) and stale/merged local branches.
+- **Git Stash Drawer / Visual Manager (v1.6.0)**: Inspect, apply/pop, drop, and push Git stashes directly from the GUI.
+- **GUI Commit & Staging Manager (v1.5.0)**: Stage/unstage individual or all modified files and commit directly within the application.
+- **Branch Switcher & Git Merge Tool (v1.4.0)**: Fast branch checkout dialog and external mergetool launcher (`git mergetool`) for conflict resolution.
+
 ## New in Version 1.3.2
 - **Automatic Updates**: Added automatic update checker on startup and manual check option in the Help menu. Downloads and installs updates directly from GitHub Releases without manual intervention.
 
