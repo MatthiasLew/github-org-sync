@@ -61,11 +61,12 @@ def test_load_corrupt_config_returns_defaults(mock_config_path: Path) -> None:
 @pytest.mark.unit
 def test_save_and_load_workspace_cache(mock_config_path: Path) -> None:
     from github_org_sync.models.repository import Repository
+
     manager = ConfigManager()
 
     repos = [
         Repository("repo-a", "url-a", "ssh-a", status="UP_TO_DATE"),
-        Repository("repo-b", "url-b", "ssh-b", status="MISSING")
+        Repository("repo-b", "url-b", "ssh-b", status="MISSING"),
     ]
     repos[0].computed_hosting = "GitHub"
     repos[0].computed_owner = "owner-a"
@@ -85,4 +86,3 @@ def test_save_and_load_workspace_cache(mock_config_path: Path) -> None:
     assert loaded[1]["name"] == "repo-b"
     assert loaded[1]["status"] == "MISSING"
     assert loaded[1]["computed_hosting"] == "GitLab"
-

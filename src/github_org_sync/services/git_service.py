@@ -740,3 +740,70 @@ class GitService:
         except Exception as e:
             return False, str(e)
 
+    def prune_remote_branches(self, repo_path: Path, remote: str = "origin") -> tuple[bool, str]:
+        """Runs git remote prune <remote> to remove stale remote-tracking branches."""
+        try:
+            res = self._run_git(repo_path, ["remote", "prune", remote])
+            out = (res.stdout + res.stderr).strip()
+            return res.returncode == 0, out
+        except Exception as e:
+            return False, str(e)
+
+    def get_stale_branches(self, repo_path: Path) -> list[dict[str, str]]:
+        """Detects local branches that are stale:
+        - Upstream is gone ([gone])
+        - Or merged into default branch (and not HEAD / not default branch).
+        Returns a list of dicts: [{'name': branch, 'upstream': upstream, 'reason': 'gone' | 'merged'}].
+        """
+        try:
+            # 1. Determine current HEAD
+            res_head = self._run_git(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
+            current_head = res_head.stdout.strip() if res_head.returncode == 0 else ""
+
+            # 2. Determine default branch
+            default_branch = self.get_default_branch(repo_path) or "main"
+
+            # 3. Check merged branches into default branch
+            merged_branches: set[str] = set()
+            res_merged = self._run_git(repo_path, ["branch", "--merged", default_branch])
+            if res_merged.returncode == 0:
+                for line in res_merged.stdout.splitlines():
+                    clean_b = line.strip().lstrip("*+ ").strip()
+                    if clean_b:
+                        merged_branches.add(clean_b)
+
+            # 4. Check tracking status with for-each-ref
+            fmt = "%(refname:short)|%(upstream:short)|%(upstream:track)"
+            res_refs = self._run_git(repo_path, ["for-each-ref", f"--format={fmt}", "refs/heads/"])
+            if res_refs.returncode != 0:
+                return []
+
+            stale_list: list[dict[str, str]] = []
+            protected = {current_head, default_branch, "main", "master", "develop", "HEAD"}
+
+            for line in res_refs.stdout.splitlines():
+                parts = line.strip().split("|")
+                if len(parts) < 3:
+                    continue
+                b_name, upstream, track = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                if not b_name or b_name in protected:
+                    continue
+
+                if "[gone]" in track:
+                    stale_list.append({"name": b_name, "upstream": upstream, "reason": "gone"})
+                elif b_name in merged_branches:
+                    stale_list.append({"name": b_name, "upstream": upstream, "reason": "merged"})
+
+            return stale_list
+        except Exception:
+            return []
+
+    def delete_local_branch(self, repo_path: Path, branch_name: str, force: bool = True) -> tuple[bool, str]:
+        """Deletes a local branch (git branch -D if force else -d)."""
+        try:
+            flag = "-D" if force else "-d"
+            res = self._run_git(repo_path, ["branch", flag, branch_name])
+            out = (res.stdout + res.stderr).strip()
+            return res.returncode == 0, out
+        except Exception as e:
+            return False, str(e)

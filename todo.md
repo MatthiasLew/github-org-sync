@@ -38,7 +38,7 @@ Displays the repository's stash stack and provides push/pop/drop actions.
 
 ---
 
-## 3. Prune Stale Local & Remote Tracking Branches
+## 3. Prune Stale Local & Remote Tracking Branches [COMPLETED]
 
 ### Description
 Cleans up local branch lists by identifying and pruning local branches whose remote branches have been deleted on the server.

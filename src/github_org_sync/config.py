@@ -100,4 +100,3 @@ class ConfigManager:
             return []
         except Exception:
             return []
-

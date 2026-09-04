@@ -234,3 +234,39 @@ def test_stash_dialog_flow(qtbot: Any) -> None:
     with patch("PySide6.QtWidgets.QMessageBox.information"):
         dialog._on_pop()
     mock_git.stash_pop.assert_called_once_with(Path("/dummy"), 0)
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_prune_dialog_flow(qtbot: Any) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from github_org_sync.services.git_service import GitService
+    from github_org_sync.ui.prune_dialog import PruneBranchesDialog
+
+    repo = Repository("test-repo", "url", "ssh", status="UP_TO_DATE")
+    repo.local_path = Path("/dummy")
+    mock_git = MagicMock(spec=GitService)
+    mock_git.prune_remote_branches.return_value = (True, "Pruning origin\n * [pruned] origin/old-branch")
+    mock_git.get_stale_branches.return_value = [
+        {"name": "old-branch", "upstream": "origin/old-branch", "reason": "gone"},
+        {"name": "merged-feature", "upstream": "origin/merged-feature", "reason": "merged"},
+    ]
+    mock_git.delete_local_branch.return_value = (True, "Deleted")
+
+    dialog = PruneBranchesDialog(repo, mock_git)
+    qtbot.addWidget(dialog)
+
+    assert dialog.branch_table.rowCount() == 2
+    assert dialog.branch_table.item(0, 0) is not None
+    assert dialog.branch_table.item(0, 0).text() == "old-branch"
+    assert dialog.branch_table.item(1, 0) is not None
+    assert dialog.branch_table.item(1, 0).text() == "merged-feature"
+
+    with (
+        patch("PySide6.QtWidgets.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+        patch("PySide6.QtWidgets.QMessageBox.information"),
+    ):
+        dialog._on_delete_selected()
+
+    assert mock_git.delete_local_branch.call_count == 2

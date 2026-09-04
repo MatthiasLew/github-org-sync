@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-09-04
+
+### Added
+- **Prune Stale Branches (Remote & Local)**: Prunes stale remote-tracking branch references (`git remote prune origin`) and identifies local branches whose remote counterparts are deleted (`[gone]`) or merged into the default branch. Provides an interactive GUI dialog (`PruneBranchesDialog`) to inspect and batch delete stale branches cleanly. Accessible via the right-click context menu in the repository table.
+
 ## [1.6.0] - 2026-09-04
 
 ### Added

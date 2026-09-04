@@ -1006,7 +1006,11 @@ class CommitDialog(QDialog):
             self.unstaged_list.addItem(f)
 
     def _on_stage_selected(self) -> None:
-        selected = [self.unstaged_list.item(i).text() for i in range(self.unstaged_list.count()) if self.unstaged_list.item(i).isSelected()]
+        selected = [
+            self.unstaged_list.item(i).text()
+            for i in range(self.unstaged_list.count())
+            if self.unstaged_list.item(i).isSelected()
+        ]
         for f in selected:
             self.git_service.stage_file(self.repo_path, f)
         self._refresh_file_lists()
@@ -1016,7 +1020,11 @@ class CommitDialog(QDialog):
         self._refresh_file_lists()
 
     def _on_unstage_selected(self) -> None:
-        selected = [self.staged_list.item(i).text() for i in range(self.staged_list.count()) if self.staged_list.item(i).isSelected()]
+        selected = [
+            self.staged_list.item(i).text()
+            for i in range(self.staged_list.count())
+            if self.staged_list.item(i).isSelected()
+        ]
         for f in selected:
             self.git_service.unstage_file(self.repo_path, f)
         self._refresh_file_lists()
@@ -1050,4 +1058,3 @@ class CommitDialog(QDialog):
                 _t("title_error"),
                 _t("commit_error", error=output),
             )
-

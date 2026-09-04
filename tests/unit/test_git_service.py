@@ -402,3 +402,47 @@ def test_stash_push_pop_drop(mock_run: MagicMock, git_service: GitService) -> No
     assert ok is True
     mock_run.assert_called_with(Path("/dummy"), ["stash", "pop", "stash@{0}"])
 
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_prune_remote_branches(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="Pruning origin\n * [pruned] origin/feat\n", stderr="")
+    ok, out = git_service.prune_remote_branches(Path("/dummy"))
+    assert ok is True
+    assert "[pruned] origin/feat" in out
+    mock_run.assert_called_with(Path("/dummy"), ["remote", "prune", "origin"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+@patch.object(GitService, "get_default_branch")
+def test_get_stale_branches(mock_def_branch: MagicMock, mock_run: MagicMock, git_service: GitService) -> None:
+    mock_def_branch.return_value = "main"
+
+    cp_head = MagicMock(returncode=0, stdout="main\n")
+    cp_merged = MagicMock(returncode=0, stdout="  merged-feat\n* main\n")
+    cp_refs = MagicMock(
+        returncode=0,
+        stdout=(
+            "main|origin/main||\n"
+            "gone-feat|origin/gone-feat|[gone]|\n"
+            "merged-feat|origin/merged-feat||\n"
+            "active-feat|origin/active-feat|[ahead 1]|\n"
+        ),
+    )
+    mock_run.side_effect = [cp_head, cp_merged, cp_refs]
+
+    stale = git_service.get_stale_branches(Path("/dummy"))
+    assert len(stale) == 2
+    assert stale[0] == {"name": "gone-feat", "upstream": "origin/gone-feat", "reason": "gone"}
+    assert stale[1] == {"name": "merged-feat", "upstream": "origin/merged-feat", "reason": "merged"}
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_delete_local_branch(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="Deleted branch old-feat (was 1234567).", stderr="")
+    ok, out = git_service.delete_local_branch(Path("/dummy"), "old-feat", force=True)
+    assert ok is True
+    assert "Deleted branch old-feat" in out
+    mock_run.assert_called_with(Path("/dummy"), ["branch", "-D", "old-feat"])
