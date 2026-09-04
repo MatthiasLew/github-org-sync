@@ -52,6 +52,7 @@ class RepositoryTable(QTableWidget):
     COLUMNS = [
         "col_select",
         "col_name",
+        "col_host",
         "col_visibility",
         "col_archived",
         "col_status",
@@ -77,8 +78,6 @@ class RepositoryTable(QTableWidget):
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.setAlternatingRowColors(True)
 
-        # We will set stylesheet dynamically matching theme colors in styles.py
-
         # Header sizing
         header = self.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -87,13 +86,14 @@ class RepositoryTable(QTableWidget):
         # Set default widths
         self.setColumnWidth(0, 70)  # Selected
         self.setColumnWidth(1, 180)  # Repository
-        self.setColumnWidth(2, 90)  # Visibility
-        self.setColumnWidth(3, 85)  # Archived
-        self.setColumnWidth(4, 120)  # Local Status
-        self.setColumnWidth(5, 100)  # Branch
-        self.setColumnWidth(6, 65)  # Ahead
-        self.setColumnWidth(7, 65)  # Behind
-        self.setColumnWidth(8, 90)  # Action
+        self.setColumnWidth(2, 60)  # Host
+        self.setColumnWidth(3, 90)  # Visibility
+        self.setColumnWidth(4, 85)  # Archived
+        self.setColumnWidth(5, 120)  # Local Status
+        self.setColumnWidth(6, 100)  # Branch
+        self.setColumnWidth(7, 65)  # Ahead
+        self.setColumnWidth(8, 65)  # Behind
+        self.setColumnWidth(9, 90)  # Action
 
         # Double click & Context menu
         self.doubleClicked.connect(self._on_double_clicked)
@@ -102,6 +102,9 @@ class RepositoryTable(QTableWidget):
 
         # Sorting
         self.setSortingEnabled(True)
+
+    def _col(self, key: str) -> int:
+        return self.COLUMNS.index(key)
 
     def _get_repo_name(self, item: QTableWidgetItem | None) -> str:
         if not item:
@@ -125,18 +128,18 @@ class RepositoryTable(QTableWidget):
 
         # Retranslate row statuses if repositories are loaded
         for idx in range(self.rowCount()):
-            name_item = self.item(idx, 1)
+            name_item = self.item(idx, self._col("col_name"))
             if name_item:
                 repo_name = self._get_repo_name(name_item)
                 repo = next((r for r in self.repositories if r.name == repo_name), None)
                 if repo:
                     # Update translated local status text
-                    status_item = self.item(idx, 4)
+                    status_item = self.item(idx, self._col("col_status"))
                     if status_item:
                         status_item.setText(_t(f"state_{repo.status}"))
 
                     # Update translated message if it is a standard description
-                    res_item = self.item(idx, 9)
+                    res_item = self.item(idx, self._col("col_result"))
                     if res_item and repo.status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
                         res_item.setText(_t(f"desc_{repo.status}"))
 
@@ -165,59 +168,69 @@ class RepositoryTable(QTableWidget):
             layout.addWidget(cb)
             layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.setContentsMargins(0, 0, 0, 0)
-            self.setCellWidget(idx, 0, checkbox_widget)
+            self.setCellWidget(idx, self._col("col_select"), checkbox_widget)
             self.checkbox_map[repo.name] = cb
-            self.setItem(idx, 0, CheckboxTableWidgetItem(cb))
+            self.setItem(idx, self._col("col_select"), CheckboxTableWidgetItem(cb))
 
             # Column 1: Repository Name
-            host = getattr(repo, "computed_hosting", "GitHub") if hasattr(repo, "computed_hosting") else "GitHub"
-            display_name = f"[{host}] {repo.name}" if host != "GitHub" else repo.name
-            name_item = QTableWidgetItem(display_name)
+            name_item = QTableWidgetItem(repo.name)
             name_item.setData(Qt.ItemDataRole.UserRole, repo.name)
             name_item.setToolTip(repo.name)
-            self.setItem(idx, 1, name_item)
+            self.setItem(idx, self._col("col_name"), name_item)
 
-            # Column 2: Visibility
-            self.setItem(idx, 2, QTableWidgetItem(repo.visibility.upper()))
+            # Column 2: Host (Badge)
+            host = getattr(repo, "computed_hosting", "GitHub") if hasattr(repo, "computed_hosting") else "GitHub"
+            host_item = QTableWidgetItem(host)
+            host_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if host == "GitHub":
+                host_item.setForeground(QColor("#60a5fa"))
+            elif host == "GitLab":
+                host_item.setForeground(QColor("#fb923c"))
+            elif host == "Bitbucket":
+                host_item.setForeground(QColor("#38bdf8"))
+            self.setItem(idx, self._col("col_host"), host_item)
 
-            # Column 3: Archived
+            # Column 3: Visibility
+            self.setItem(idx, self._col("col_visibility"), QTableWidgetItem(repo.visibility.upper()))
+
+            # Column 4: Archived
             arch_text = _t("yes_word") if repo.is_archived else _t("no_word")
-            self.setItem(idx, 3, QTableWidgetItem(arch_text))
+            self.setItem(idx, self._col("col_archived"), QTableWidgetItem(arch_text))
 
-            # Column 4: Local Status
+            # Column 5: Local Status
             status_item = QTableWidgetItem(_t(f"state_{repo.status}"))
             self._style_status_item(status_item, repo.status)
             status_item.setToolTip(status_item.text())
-            self.setItem(idx, 4, status_item)
+            self.setItem(idx, self._col("col_status"), status_item)
 
-            # Column 5: Branch
+            # Column 6: Branch
             branch_val = repo.branch or ""
             branch_item = QTableWidgetItem(branch_val)
             branch_item.setToolTip(branch_val)
-            self.setItem(idx, 5, branch_item)
+            self.setItem(idx, self._col("col_branch"), branch_item)
 
-            # Column 6: Ahead
+            # Column 7: Ahead
             ahead_val = str(repo.ahead) if repo.ahead is not None else ""
-            self.setItem(idx, 6, NumericTableWidgetItem(ahead_val))
+            self.setItem(idx, self._col("col_ahead"), NumericTableWidgetItem(ahead_val))
 
-            # Column 7: Behind
+            # Column 8: Behind
             behind_val = str(repo.behind) if repo.behind is not None else ""
-            self.setItem(idx, 7, NumericTableWidgetItem(behind_val))
+            self.setItem(idx, self._col("col_behind"), NumericTableWidgetItem(behind_val))
 
-            # Column 8: Action
+            # Column 9: Action
             action_text = self._determine_action(repo)
             action_item = QTableWidgetItem(action_text)
             action_item.setToolTip(action_text)
-            self.setItem(idx, 8, action_item)
+            self.setItem(idx, self._col("col_action"), action_item)
 
-            # Column 9: Result / Message
+            # Column 10: Result / Message
             if repo.status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
                 res_val = _t(f"desc_{repo.status}")
             else:
                 res_val = repo.result or ""
             res_item = QTableWidgetItem(res_val)
             res_item.setToolTip(res_val)
-            self.setItem(idx, 9, res_item)
+            self.setItem(idx, self._col("col_result"), res_item)
 
         self.setSortingEnabled(True)
 
@@ -229,7 +242,7 @@ class RepositoryTable(QTableWidget):
 
         selected_names = []
         for r in range(self.rowCount()):
-            name_item = self.item(r, 1)
+            name_item = self.item(r, self._col("col_name"))
             if name_item and name_item.isSelected():
                 selected_names.append(self._get_repo_name(name_item))
 
@@ -244,7 +257,7 @@ class RepositoryTable(QTableWidget):
 
         # Perform single update
         for row in range(self.rowCount()):
-            name_item = self.item(row, 1)
+            name_item = self.item(row, self._col("col_name"))
             if name_item and self._get_repo_name(name_item) == repo_name:
                 for repo in self.repositories:
                     if repo.name == repo_name:
@@ -253,21 +266,21 @@ class RepositoryTable(QTableWidget):
                             repo.result = message
 
                         # Update status item
-                        status_item = self.item(row, 4)
+                        status_item = self.item(row, self._col("col_status"))
                         if status_item:
                             status_item.setText(_t(f"state_{status}"))
                             self._style_status_item(status_item, status)
                             status_item.setToolTip(status_item.text())
 
                         # Update action item
-                        action_item = self.item(row, 8)
+                        action_item = self.item(row, self._col("col_action"))
                         if action_item:
                             action_text = self._determine_action(repo)
                             action_item.setText(action_text)
                             action_item.setToolTip(action_text)
 
                         # Update result item
-                        res_item = self.item(row, 9)
+                        res_item = self.item(row, self._col("col_result"))
                         if res_item and message is not None:
                             if status in ("WRONG_REMOTE", "NOT_A_REPOSITORY", "NO_UPSTREAM"):
                                 res_val = _t(f"desc_{status}")
@@ -277,14 +290,14 @@ class RepositoryTable(QTableWidget):
                             res_item.setToolTip(res_val)
 
                         # Update branch/ahead/behind from repo state
-                        branch_item = self.item(row, 5)
+                        branch_item = self.item(row, self._col("col_branch"))
                         if branch_item:
                             branch_item.setText(repo.branch or "")
                             branch_item.setToolTip(repo.branch or "")
-                        ahead_item = self.item(row, 6)
+                        ahead_item = self.item(row, self._col("col_ahead"))
                         if ahead_item:
                             ahead_item.setText(str(repo.ahead) if repo.ahead is not None else "")
-                        behind_item = self.item(row, 7)
+                        behind_item = self.item(row, self._col("col_behind"))
                         if behind_item:
                             behind_item.setText(str(repo.behind) if repo.behind is not None else "")
 
@@ -335,25 +348,25 @@ class RepositoryTable(QTableWidget):
         for repo in repos:
             found_row = -1
             for r in range(self.rowCount()):
-                name_item = self.item(r, 1)
+                name_item = self.item(r, self._col("col_name"))
                 if name_item and self._get_repo_name(name_item) == repo.name:
                     found_row = r
                     break
 
             if found_row != -1:
                 # Update cells
-                self.setItem(found_row, 2, QTableWidgetItem(repo.visibility.upper()))
+                self.setItem(found_row, self._col("col_visibility"), QTableWidgetItem(repo.visibility.upper()))
 
                 arch_text = _t("yes_word") if repo.is_archived else _t("no_word")
-                self.setItem(found_row, 3, QTableWidgetItem(arch_text))
+                self.setItem(found_row, self._col("col_archived"), QTableWidgetItem(arch_text))
 
-                status_item = self.item(found_row, 4)
+                status_item = self.item(found_row, self._col("col_status"))
                 if status_item:
                     status_item.setText(_t(f"state_{repo.status}"))
                     self._style_status_item(status_item, repo.status)
                     status_item.setToolTip(status_item.text())
 
-                branch_item = self.item(found_row, 5)
+                branch_item = self.item(found_row, self._col("col_branch"))
                 if branch_item:
                     branch_item.setText(repo.branch or "")
                     branch_item.setToolTip(repo.branch or "")
@@ -448,7 +461,7 @@ class RepositoryTable(QTableWidget):
 
     def _on_double_clicked(self, index: Any) -> None:
         row = index.row()
-        name_item = self.item(row, 1)
+        name_item = self.item(row, self._col("col_name"))
         if not name_item:
             return
         repo_name = self._get_repo_name(name_item)
@@ -462,7 +475,7 @@ class RepositoryTable(QTableWidget):
             return
 
         row = item.row()
-        name_item = self.item(row, 1)
+        name_item = self.item(row, self._col("col_name"))
         if not name_item:
             return
 
@@ -532,6 +545,12 @@ class RepositoryTable(QTableWidget):
         act_resolve.triggered.connect(lambda: self._resolve_issue(repo))
         menu.addAction(act_resolve)
 
+        # Context action 5: Switch Branch
+        act_switch_branch = QAction(_t("ctx_switch_branch"), self)
+        act_switch_branch.setEnabled(repo.local_path is not None and repo.local_path.exists())
+        act_switch_branch.triggered.connect(lambda: self._switch_branch(repo))
+        menu.addAction(act_switch_branch)
+
         menu.exec(self.viewport().mapToGlobal(pos))
 
     def _copy_cell(self, row: int, col: int) -> None:
@@ -583,6 +602,48 @@ class RepositoryTable(QTableWidget):
             if hasattr(main_win, "log"):
                 main_win.log(f"Repository {repo.name} resolved. Status is now: {status}.")
 
+    def _switch_branch(self, repo: Repository) -> None:
+        from github_org_sync.ui.dialogs import SwitchBranchDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        if repo.local_path is None:
+            return
+
+        branches = git_service.get_local_branches(Path(repo.local_path))
+        if not branches:
+            QMessageBox.warning(self, _t("error_open_title"), "No local branches found.")
+            return
+
+        dialog = SwitchBranchDialog(repo.name, branches, repo.branch, self)
+        res = dialog.exec()
+        if res == QDialog.DialogCode.Accepted and dialog.selected_branch:
+            ok, output = git_service.checkout_branch(Path(repo.local_path), dialog.selected_branch)
+            if ok:
+                org_text = main_win.org_input.text().strip() if hasattr(main_win, "org_input") else ""
+                status, branch, ahead, behind, msg = git_service.get_local_status(Path(repo.local_path), org_text)
+                self.update_repository_status(repo.name, status, msg)
+                repo.branch = branch
+                repo.status = status
+                repo.ahead = ahead
+                repo.behind = behind
+                for row in range(self.rowCount()):
+                    name_item = self.item(row, self._col("col_name"))
+                    if name_item and self._get_repo_name(name_item) == repo.name:
+                        self.setItem(row, self._col("col_branch"), QTableWidgetItem(branch or ""))
+                        self.setItem(row, self._col("col_ahead"), NumericTableWidgetItem(str(ahead) if ahead is not None else ""))
+                        self.setItem(row, self._col("col_behind"), NumericTableWidgetItem(str(behind) if behind is not None else ""))
+                        break
+
+                if hasattr(main_win, "log"):
+                    main_win.log(f"Switched repository {repo.name} to branch {dialog.selected_branch}.")
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to switch branch:\n{output}")
+
     def _open_folder(self, path: Path) -> None:
         try:
             if hasattr(os, "startfile"):
@@ -633,7 +694,7 @@ class RepositoryTable(QTableWidget):
                 break
 
         for row in range(self.rowCount()):
-            name_item = self.item(row, 1)
+            name_item = self.item(row, self._col("col_name"))
             repo_name = self._get_repo_name(name_item)
 
             # Check status filter & find repo

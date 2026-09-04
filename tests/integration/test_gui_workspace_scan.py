@@ -98,12 +98,17 @@ def test_workspace_scanning_flow(qtbot: Any, mock_gui_services: Any, tmp_path: P
     # Check table count and host prefixes in Column 1
     assert window.table.rowCount() == 3
 
-    # Check that repositories were correctly prefix-tagged
-    # Sort or check all rows
-    row_texts = [window.table.item(r, 1).text() for r in range(3)]
-    assert "repo-github" in row_texts or "[GitHub] repo-github" in row_texts  # GitHub has no prefix display
-    assert "[GitLab] repo-gitlab" in row_texts
-    assert "[No remote] repo-none" in row_texts
+    # Check that repositories were correctly populated
+    row_names = [window.table.item(r, window.table._col("col_name")).text() for r in range(3)]
+    assert "repo-github" in row_names
+    assert "repo-gitlab" in row_names
+    assert "repo-none" in row_names
+
+    # Check host values
+    row_hosts = [window.table.item(r, window.table._col("col_host")).text() for r in range(3)]
+    assert "GitHub" in row_hosts
+    assert "GitLab" in row_hosts
+    assert "No remote" in row_hosts
 
     # Check group filter dropdown contents
     assert window.group_filter_cb.count() == 4  # All + 3 groups
@@ -145,9 +150,9 @@ def test_compare_workspace_with_org(qtbot: Any, mock_gui_services: Any, tmp_path
     # repo-b should be marked MISSING
     repo_b_row = -1
     for r in range(window.table.rowCount()):
-        if window.table._get_repo_name(window.table.item(r, 1)) == "repo-b":
+        if window.table._get_repo_name(window.table.item(r, window.table._col("col_name"))) == "repo-b":
             repo_b_row = r
             break
 
     assert repo_b_row != -1
-    assert window.table.item(repo_b_row, 4).text() == _t("state_MISSING")
+    assert window.table.item(repo_b_row, window.table._col("col_status")).text() == _t("state_MISSING")

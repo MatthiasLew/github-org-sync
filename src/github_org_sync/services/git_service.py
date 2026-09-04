@@ -585,6 +585,12 @@ class GitService:
     def abort_rebase(self, path: Path) -> subprocess.CompletedProcess[str]:
         return self._run_git(path, ["rebase", "--abort"])
 
+    def launch_merge_tool(self, path: Path) -> None:
+        """Launches the configured git mergetool asynchronously."""
+        from github_org_sync.utils.process import popen_process
+
+        popen_process(["git", "mergetool"], cwd=path)
+
     def create_branch(self, path: Path, branch_name: str) -> subprocess.CompletedProcess[str]:
         return self._run_git(path, ["checkout", "-b", branch_name])
 
@@ -611,3 +617,20 @@ class GitService:
             return cp.stdout if cp.returncode == 0 else (cp.stderr or "")
         except Exception as e:
             return str(e)
+
+    def get_local_branches(self, repo_path: Path) -> list[str]:
+        """Returns list of local branch names in the repository."""
+        try:
+            res = self._run_git(repo_path, ["branch", "--format=%(refname:short)"])
+            return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+        except Exception:
+            return []
+
+    def checkout_branch(self, repo_path: Path, branch_name: str) -> tuple[bool, str]:
+        """Performs a git checkout to the selected branch."""
+        try:
+            res = self._run_git(repo_path, ["checkout", branch_name])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+

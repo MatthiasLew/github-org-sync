@@ -1,0 +1,12 @@
+[commands]
+lint = ".venv/Scripts/python.exe -m ruff check ."
+typecheck = ".venv/Scripts/python.exe -m mypy src"
+test = ".venv/Scripts/python.exe -m pytest -q"
+
+[ignore]
+paths = [
+    ".venv-audit",
+    ".venv-release",
+    "build",
+    "dist",
+]

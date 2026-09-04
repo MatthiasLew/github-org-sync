@@ -182,7 +182,7 @@ def test_workspace_change_cancels_active_worker(qtbot: Any, mock_services: tuple
 
         # Verify statuses reset to MISSING
         assert window.repositories[0].status == "MISSING"
-        item = window.table.item(0, 4)
+        item = window.table.item(0, window.table._col("col_status"))
         assert item is not None
         assert item.text() == _t("state_MISSING")
 

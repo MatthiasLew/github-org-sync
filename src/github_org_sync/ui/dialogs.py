@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QInputDialog,
@@ -321,6 +322,10 @@ class ResolveIssueDialog(QDialog):
             btn_abort_rebase.clicked.connect(lambda: self._run_git_action(self.git_service.abort_rebase, "ABORTED"))
             self.btn_layout.addWidget(btn_abort_rebase)
 
+            btn_merge_tool = QPushButton(_t("btn_launch_mergetool"), self)
+            btn_merge_tool.clicked.connect(self._on_launch_mergetool)
+            self.btn_layout.addWidget(btn_merge_tool)
+
             btn_keep = QPushButton(_t("btn_keep_skip"), self)
             btn_keep.clicked.connect(lambda: self._accept_decision("KEEP_AND_SKIP"))
             self.btn_layout.addWidget(btn_keep)
@@ -592,6 +597,10 @@ class ResolveIssueDialog(QDialog):
             else:
                 QMessageBox.warning(self, "Error", f"Branch creation failed:\n{cp.stderr or cp.stdout}")
 
+    def _on_launch_mergetool(self) -> None:
+        if self.path:
+            self.git_service.launch_merge_tool(self.path)
+
     def _run_git_action(self, func: Any, decision: str) -> None:
         path = self.path
         if path is None:
@@ -825,3 +834,51 @@ class WorkspaceWizardDialog(QDialog):
 
         QMessageBox.information(self, _t("wizard_title"), summary)
         self.accept()
+
+
+class SwitchBranchDialog(QDialog):
+    def __init__(
+        self,
+        repo_name: str,
+        branches: list[str],
+        current_branch: str | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.selected_branch: str | None = None
+        self.setWindowTitle(_t("branch_switcher_title"))
+        self.resize(350, 150)
+        self._setup_ui(repo_name, branches, current_branch)
+
+    def _setup_ui(self, repo_name: str, branches: list[str], current_branch: str | None) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(14, 14, 14, 14)
+
+        label = QLabel(_t("branch_switcher_label"), self)
+        layout.addWidget(label)
+
+        self.combo = QComboBox(self)
+        self.combo.addItems(branches)
+        if current_branch and current_branch in branches:
+            self.combo.setCurrentText(current_branch)
+        layout.addWidget(self.combo)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.btn_switch = QPushButton(_t("branch_switcher_btn"), self)
+        self.btn_switch.setObjectName("btnAction")
+        self.btn_switch.clicked.connect(self._on_switch)
+        btn_layout.addWidget(self.btn_switch)
+
+        self.btn_cancel = QPushButton(_t("btn_cancel"), self)
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(self.btn_cancel)
+
+        layout.addLayout(btn_layout)
+
+    def _on_switch(self) -> None:
+        self.selected_branch = self.combo.currentText()
+        self.accept()
+

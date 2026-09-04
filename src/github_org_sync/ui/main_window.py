@@ -721,6 +721,8 @@ class MainWindow(QMainWindow):
         if widths:
             self.table.set_column_widths(widths)
 
+        self._load_cache_for_current_org()
+
     def closeEvent(self, event: Any) -> None:
         # Check active runs
         if self.sync_worker and self.sync_worker.isRunning():
@@ -952,6 +954,8 @@ class MainWindow(QMainWindow):
         self.apply_table_filters()
         self._set_app_state("IDLE")
         self.progress_bar.setValue(0)
+        if not was_cancelled:
+            self.config_manager.save_workspace_cache(self.org_input.text().strip(), self.repositories)
         if was_cancelled:
             self.log("Workspace local inspection cancelled.")
         else:
@@ -1059,6 +1063,7 @@ class MainWindow(QMainWindow):
             self.last_md_report = md_path
             self.btn_open_report.setEnabled(True)
             self.log(f"Report generated successfully: {md_path.name}")
+            self.config_manager.save_workspace_cache(self.org_input.text().strip(), self.repositories)
         except Exception as e:
             self.log(f"Report Generation Failed: {e}")
 
@@ -1288,6 +1293,7 @@ class MainWindow(QMainWindow):
         self.config["last_organization"] = org_text
         self.config_manager.save(self.config)
         self._update_load_button_state()
+        self._load_cache_for_current_org()
 
     def _is_org_valid(self) -> bool:
         org_text = self.org_input.text().strip()
@@ -1298,6 +1304,40 @@ class MainWindow(QMainWindow):
             return True
         except ValueError:
             return False
+
+    def _load_cache_for_current_org(self) -> None:
+        org_text = self.org_input.text().strip()
+        if not org_text:
+            return
+
+        cached_data = self.config_manager.load_workspace_cache(org_text)
+        if cached_data:
+            cached_repos = []
+            for item in cached_data:
+                ws_text = self.workspace_input.text().strip()
+                local_path = Path(ws_text) / item["name"] if ws_text else None
+                r_obj = Repository(
+                    name=item["name"],
+                    url=item["url"],
+                    ssh_url=item["url"],
+                    is_archived=item["is_archived"],
+                    is_fork=item.get("is_fork", False),
+                    default_branch=item.get("default_branch", "main"),
+                    local_path=local_path,
+                    status=item["status"],
+                    branch=item["branch"],
+                    ahead=item["ahead"],
+                    behind=item["behind"],
+                    result=item["result"],
+                )
+                r_obj.computed_hosting = item.get("computed_hosting", "GitHub")
+                r_obj.computed_owner = item.get("computed_owner", "")
+                cached_repos.append(r_obj)
+
+            self.repositories = cached_repos
+            self.table.set_repositories(self.repositories)
+            self.apply_table_filters()
+            self.statusBar().showMessage(f"Loaded cached state for {org_text}")
 
     def _update_load_button_state(self) -> None:
         is_idle = self.app_state == "IDLE"
@@ -1505,6 +1545,7 @@ class MainWindow(QMainWindow):
 
         self.table.set_repositories(self.repositories)
         self.apply_table_filters()
+        self.config_manager.save_workspace_cache(self.org_input.text().strip(), self.repositories)
 
     def _populate_group_filter(self) -> None:
         self.group_filter_cb.blockSignals(True)

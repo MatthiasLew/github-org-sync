@@ -290,4 +290,33 @@ def test_git_service_exceptions(mock_is_repo: MagicMock, mock_run: MagicMock, gi
         # get_local_status should handle the error and return FAILED status
         status, _, _, _, err_msg = git_service.get_local_status(Path("/dummy"), "org")
         assert status == "FAILED"
-        assert "Access denied" in err_msg
+        assert err_msg is not None and "Access denied" in err_msg
+
+
+@pytest.mark.unit
+@patch("github_org_sync.utils.process.popen_process")
+def test_launch_merge_tool(mock_popen: MagicMock, git_service: GitService) -> None:
+    git_service.launch_merge_tool(Path("/dummy"))
+    mock_popen.assert_called_once_with(["git", "mergetool"], cwd=Path("/dummy"))
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_get_local_branches(mock_run: MagicMock, git_service: GitService) -> None:
+    cp = MagicMock(returncode=0, stdout="master\nmain\nfeature/test\n")
+    mock_run.return_value = cp
+    branches = git_service.get_local_branches(Path("/dummy"))
+    assert branches == ["master", "main", "feature/test"]
+    mock_run.assert_called_once_with(Path("/dummy"), ["branch", "--format=%(refname:short)"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_checkout_branch(mock_run: MagicMock, git_service: GitService) -> None:
+    cp = MagicMock(returncode=0, stdout="Switched to branch 'main'\n", stderr="")
+    mock_run.return_value = cp
+    ok, out = git_service.checkout_branch(Path("/dummy"), "main")
+    assert ok is True
+    assert "Switched to branch 'main'" in out
+    mock_run.assert_called_once_with(Path("/dummy"), ["checkout", "main"])
+
