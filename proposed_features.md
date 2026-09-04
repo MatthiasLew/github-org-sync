@@ -7,7 +7,7 @@ Below is the list of new proposed enhancements and feature ideas for the **githu
 ## Feature List & Status
 
 ### 1. GUI Commit & Staging Manager
-*   **Status**: :pause_button: **TODO**
+*   **Status**: :white_check_mark: **DONE**
 *   **Description**: Enables developers to stage/unstage individual files inside dirty repositories and commit changes directly from the GUI using a text field for the commit message.
 *   **Cross-platform Support**: Runs standard `git add`, `git reset`, and `git commit` commands using safe subprocess execution.
 

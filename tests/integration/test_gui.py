@@ -185,3 +185,28 @@ def test_shutdown_lifecycle(qtbot: Any, mock_services: tuple[MagicMock, MagicMoc
     window.close()
     # Check that there are no active threads or background runs registered
     assert window.sync_worker is None or not window.sync_worker.isRunning()
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_commit_dialog_flow(qtbot: Any) -> None:
+    from github_org_sync.services.git_service import GitService
+    from github_org_sync.ui.dialogs import CommitDialog
+
+    repo = Repository("test-repo", "url", "ssh", status="DIRTY")
+    repo.local_path = Path("/dummy")
+    mock_git = MagicMock(spec=GitService)
+    mock_git.get_staged_and_unstaged_files.return_value = (["staged.txt"], ["unstaged.txt"])
+    mock_git.commit_changes.return_value = (True, "Committed")
+
+    dialog = CommitDialog(repo, mock_git)
+    qtbot.addWidget(dialog)
+
+    assert dialog.staged_list.count() == 1
+    assert dialog.unstaged_list.count() == 1
+
+    dialog.msg_edit.setText("test commit")
+    dialog._on_commit()
+
+    assert dialog.committed is True
+    mock_git.commit_changes.assert_called_once_with(Path("/dummy"), "test commit")

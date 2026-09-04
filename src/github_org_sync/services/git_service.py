@@ -634,3 +634,64 @@ class GitService:
         except Exception as e:
             return False, str(e)
 
+    def stage_file(self, repo_path: Path, file_path: str) -> tuple[bool, str]:
+        """Stages a specific file (git add -- file_path)."""
+        try:
+            res = self._run_git(repo_path, ["add", "--", file_path])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+
+    def unstage_file(self, repo_path: Path, file_path: str) -> tuple[bool, str]:
+        """Unstages a specific file from index."""
+        try:
+            res = self._run_git(repo_path, ["restore", "--staged", "--", file_path])
+            if res.returncode != 0:
+                res = self._run_git(repo_path, ["reset", "HEAD", "--", file_path])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+
+    def stage_all(self, repo_path: Path) -> tuple[bool, str]:
+        """Stages all working tree changes (git add -A)."""
+        try:
+            res = self._run_git(repo_path, ["add", "-A"])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+
+    def unstage_all(self, repo_path: Path) -> tuple[bool, str]:
+        """Unstages all changes from index."""
+        try:
+            res = self._run_git(repo_path, ["restore", "--staged", "."])
+            if res.returncode != 0:
+                res = self._run_git(repo_path, ["reset", "HEAD"])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+
+    def commit_changes(self, repo_path: Path, message: str) -> tuple[bool, str]:
+        """Creates a git commit with the given message (git commit -m message)."""
+        try:
+            res = self._run_git(repo_path, ["commit", "-m", message])
+            return res.returncode == 0, (res.stdout + res.stderr)
+        except Exception as e:
+            return False, str(e)
+
+    def get_staged_and_unstaged_files(self, repo_path: Path) -> tuple[list[str], list[str]]:
+        """Returns tuple of (staged_files, unstaged_files)."""
+        try:
+            dirty = self.get_dirty_files(repo_path)
+            staged = []
+            unstaged = []
+            for code, fpath in dirty:
+                idx = code[0] if len(code) > 0 else " "
+                work = code[1] if len(code) > 1 else " "
+                if idx not in (" ", "?"):
+                    staged.append(fpath)
+                if work != " " or idx == "?":
+                    unstaged.append(fpath)
+            return staged, unstaged
+        except Exception:
+            return [], []
+

@@ -232,6 +232,11 @@ class ResolveIssueDialog(QDialog):
             dirty = self.git_service.get_dirty_files(path)
             self.details_area.setPlainText("\n".join(f"[{code}] {fpath}" for code, fpath in dirty))
 
+            btn_stage_commit = QPushButton(_t("btn_stage_commit"), self)
+            btn_stage_commit.setObjectName("btnAction")
+            btn_stage_commit.clicked.connect(self._on_open_commit_dialog)
+            self.btn_layout.addWidget(btn_stage_commit)
+
             btn_keep = QPushButton(_t("btn_keep_skip"), self)
             btn_keep.clicked.connect(lambda: self._accept_decision("KEEP_AND_SKIP"))
             self.btn_layout.addWidget(btn_keep)
@@ -402,6 +407,17 @@ class ResolveIssueDialog(QDialog):
     def _accept_decision(self, decision: str) -> None:
         self.decision = decision
         self.accept()
+
+    def _on_open_commit_dialog(self) -> None:
+        dlg = CommitDialog(self.repo, self.git_service, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.committed:
+            if self.path:
+                status, branch, ahead, behind, msg = self.git_service.get_local_status(self.path, self.org_name)
+                self.repo.status = status
+                self.repo.branch = branch
+                self.repo.ahead = ahead
+                self.repo.behind = behind
+            self._accept_decision("COMMITTED")
 
     def _open_terminal(self) -> None:
         path = self.path
@@ -881,4 +897,157 @@ class SwitchBranchDialog(QDialog):
     def _on_switch(self) -> None:
         self.selected_branch = self.combo.currentText()
         self.accept()
+
+
+class CommitDialog(QDialog):
+    def __init__(
+        self,
+        repo: Repository,
+        git_service: GitService,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.repo = repo
+        self.git_service = git_service
+        self.repo_path = Path(repo.local_path) if repo.local_path else Path()
+        self.committed = False
+
+        self.setWindowTitle(_t("commit_dialog_title", repo=repo.name))
+        self.resize(620, 520)
+        self._setup_ui()
+        self._refresh_file_lists()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(14, 14, 14, 14)
+
+        branch_name = self.repo.branch or "main"
+        header_label = QLabel(_t("commit_branch_label", branch=branch_name), self)
+        header_label.setStyleSheet("font-weight: bold; font-size: 10pt; color: #60a5fa;")
+        layout.addWidget(header_label)
+
+        lists_splitter = QSplitter(Qt.Orientation.Horizontal, self)
+
+        # Unstaged files section
+        unstaged_widget = QWidget(self)
+        unstaged_layout = QVBoxLayout(unstaged_widget)
+        unstaged_layout.setContentsMargins(0, 0, 0, 0)
+        unstaged_layout.addWidget(QLabel(_t("commit_unstaged_section"), self))
+
+        self.unstaged_list = QListWidget(self)
+        self.unstaged_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        unstaged_layout.addWidget(self.unstaged_list)
+
+        unstaged_btn_layout = QHBoxLayout()
+        self.btn_stage_sel = QPushButton(_t("btn_stage_selected"), self)
+        self.btn_stage_sel.clicked.connect(self._on_stage_selected)
+        unstaged_btn_layout.addWidget(self.btn_stage_sel)
+
+        self.btn_stage_all = QPushButton(_t("btn_stage_all"), self)
+        self.btn_stage_all.clicked.connect(self._on_stage_all)
+        unstaged_btn_layout.addWidget(self.btn_stage_all)
+        unstaged_layout.addLayout(unstaged_btn_layout)
+
+        lists_splitter.addWidget(unstaged_widget)
+
+        # Staged files section
+        staged_widget = QWidget(self)
+        staged_layout = QVBoxLayout(staged_widget)
+        staged_layout.setContentsMargins(0, 0, 0, 0)
+        staged_layout.addWidget(QLabel(_t("commit_staged_section"), self))
+
+        self.staged_list = QListWidget(self)
+        self.staged_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        staged_layout.addWidget(self.staged_list)
+
+        staged_btn_layout = QHBoxLayout()
+        self.btn_unstage_sel = QPushButton(_t("btn_unstage_selected"), self)
+        self.btn_unstage_sel.clicked.connect(self._on_unstage_selected)
+        staged_btn_layout.addWidget(self.btn_unstage_sel)
+
+        self.btn_unstage_all = QPushButton(_t("btn_unstage_all"), self)
+        self.btn_unstage_all.clicked.connect(self._on_unstage_all)
+        staged_btn_layout.addWidget(self.btn_unstage_all)
+        staged_layout.addLayout(staged_btn_layout)
+
+        lists_splitter.addWidget(staged_widget)
+        layout.addWidget(lists_splitter, 1)
+
+        # Commit message
+        layout.addWidget(QLabel(_t("commit_msg_label"), self))
+        self.msg_edit = QTextEdit(self)
+        self.msg_edit.setPlaceholderText(_t("commit_msg_placeholder"))
+        self.msg_edit.setMaximumHeight(80)
+        layout.addWidget(self.msg_edit)
+
+        # Bottom buttons
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch()
+
+        self.btn_commit = QPushButton(_t("btn_commit"), self)
+        self.btn_commit.setObjectName("btnAction")
+        self.btn_commit.clicked.connect(self._on_commit)
+        bottom_layout.addWidget(self.btn_commit)
+
+        self.btn_cancel = QPushButton(_t("btn_cancel"), self)
+        self.btn_cancel.clicked.connect(self.reject)
+        bottom_layout.addWidget(self.btn_cancel)
+
+        layout.addLayout(bottom_layout)
+
+    def _refresh_file_lists(self) -> None:
+        self.staged_list.clear()
+        self.unstaged_list.clear()
+        staged, unstaged = self.git_service.get_staged_and_unstaged_files(self.repo_path)
+        for f in staged:
+            self.staged_list.addItem(f)
+        for f in unstaged:
+            self.unstaged_list.addItem(f)
+
+    def _on_stage_selected(self) -> None:
+        selected = [self.unstaged_list.item(i).text() for i in range(self.unstaged_list.count()) if self.unstaged_list.item(i).isSelected()]
+        for f in selected:
+            self.git_service.stage_file(self.repo_path, f)
+        self._refresh_file_lists()
+
+    def _on_stage_all(self) -> None:
+        self.git_service.stage_all(self.repo_path)
+        self._refresh_file_lists()
+
+    def _on_unstage_selected(self) -> None:
+        selected = [self.staged_list.item(i).text() for i in range(self.staged_list.count()) if self.staged_list.item(i).isSelected()]
+        for f in selected:
+            self.git_service.unstage_file(self.repo_path, f)
+        self._refresh_file_lists()
+
+    def _on_unstage_all(self) -> None:
+        self.git_service.unstage_all(self.repo_path)
+        self._refresh_file_lists()
+
+    def _on_commit(self) -> None:
+        message = self.msg_edit.toPlainText().strip()
+        if not message:
+            QMessageBox.warning(self, _t("title_warning"), _t("commit_no_msg_warning"))
+            return
+
+        if self.staged_list.count() == 0:
+            QMessageBox.warning(self, _t("title_warning"), _t("commit_no_staged_warning"))
+            return
+
+        ok, output = self.git_service.commit_changes(self.repo_path, message)
+        if ok:
+            QMessageBox.information(
+                self,
+                _t("title_success"),
+                _t("commit_success", repo=self.repo.name),
+            )
+            self.committed = True
+            self.accept()
+        else:
+            QMessageBox.warning(
+                self,
+                _t("title_error"),
+                _t("commit_error", error=output),
+            )
 

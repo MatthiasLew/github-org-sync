@@ -320,3 +320,53 @@ def test_checkout_branch(mock_run: MagicMock, git_service: GitService) -> None:
     assert "Switched to branch 'main'" in out
     mock_run.assert_called_once_with(Path("/dummy"), ["checkout", "main"])
 
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_stage_and_unstage_file(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    ok, _ = git_service.stage_file(Path("/dummy"), "file.txt")
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["add", "--", "file.txt"])
+
+    ok, _ = git_service.unstage_file(Path("/dummy"), "file.txt")
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["restore", "--staged", "--", "file.txt"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_stage_and_unstage_all(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    ok, _ = git_service.stage_all(Path("/dummy"))
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["add", "-A"])
+
+    ok, _ = git_service.unstage_all(Path("/dummy"))
+    assert ok is True
+    mock_run.assert_called_with(Path("/dummy"), ["restore", "--staged", "."])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "_run_git")
+def test_commit_changes(mock_run: MagicMock, git_service: GitService) -> None:
+    mock_run.return_value = MagicMock(returncode=0, stdout="[main 1234567] feat: test", stderr="")
+    ok, out = git_service.commit_changes(Path("/dummy"), "feat: test")
+    assert ok is True
+    assert "1234567" in out
+    mock_run.assert_called_once_with(Path("/dummy"), ["commit", "-m", "feat: test"])
+
+
+@pytest.mark.unit
+@patch.object(GitService, "get_dirty_files")
+def test_get_staged_and_unstaged_files(mock_dirty: MagicMock, git_service: GitService) -> None:
+    mock_dirty.return_value = [
+        ("M ", "staged.txt"),
+        (" M", "unstaged.txt"),
+        ("??", "untracked.txt"),
+        ("MM", "both.txt"),
+    ]
+    staged, unstaged = git_service.get_staged_and_unstaged_files(Path("/dummy"))
+    assert staged == ["staged.txt", "both.txt"]
+    assert unstaged == ["unstaged.txt", "untracked.txt", "both.txt"]
+

@@ -551,6 +551,13 @@ class RepositoryTable(QTableWidget):
         act_switch_branch.triggered.connect(lambda: self._switch_branch(repo))
         menu.addAction(act_switch_branch)
 
+        # Context action 6: Stage & Commit
+        if repo.status == "DIRTY":
+            act_commit = QAction(_t("btn_stage_commit"), self)
+            act_commit.setEnabled(repo.local_path is not None and repo.local_path.exists())
+            act_commit.triggered.connect(lambda: self._commit_changes(repo))
+            menu.addAction(act_commit)
+
         menu.exec(self.viewport().mapToGlobal(pos))
 
     def _copy_cell(self, row: int, col: int) -> None:
@@ -643,6 +650,38 @@ class RepositoryTable(QTableWidget):
                     main_win.log(f"Switched repository {repo.name} to branch {dialog.selected_branch}.")
             else:
                 QMessageBox.warning(self, "Error", f"Failed to switch branch:\n{output}")
+
+    def _commit_changes(self, repo: Repository) -> None:
+        from github_org_sync.ui.dialogs import CommitDialog
+
+        main_win = self.window()
+        git_service = getattr(main_win, "git_service", None)
+        org_text = main_win.org_input.text().strip() if hasattr(main_win, "org_input") else ""
+        if not git_service:
+            from github_org_sync.services.git_service import GitService
+
+            git_service = GitService()
+        if repo.local_path is None:
+            return
+
+        dialog = CommitDialog(repo, git_service, self)
+        res = dialog.exec()
+        if res == QDialog.DialogCode.Accepted and dialog.committed:
+            status, branch, ahead, behind, msg = git_service.get_local_status(Path(repo.local_path), org_text)
+            self.update_repository_status(repo.name, status, msg)
+            repo.status = status
+            repo.branch = branch
+            repo.ahead = ahead
+            repo.behind = behind
+            for row in range(self.rowCount()):
+                name_item = self.item(row, self._col("col_name"))
+                if name_item and self._get_repo_name(name_item) == repo.name:
+                    self.setItem(row, self._col("col_branch"), QTableWidgetItem(branch or ""))
+                    self.setItem(row, self._col("col_ahead"), NumericTableWidgetItem(str(ahead) if ahead is not None else ""))
+                    self.setItem(row, self._col("col_behind"), NumericTableWidgetItem(str(behind) if behind is not None else ""))
+                    break
+            if hasattr(main_win, "log"):
+                main_win.log(f"Committed changes in repository {repo.name}. Status: {status}.")
 
     def _open_folder(self, path: Path) -> None:
         try:

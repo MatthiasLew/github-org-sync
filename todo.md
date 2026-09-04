@@ -4,7 +4,7 @@ This document outlines the step-by-step guides for implementing the proposed fea
 
 ---
 
-## 1. GUI Commit & Staging Manager
+## 1. GUI Commit & Staging Manager [COMPLETED]
 
 ### Description
 Enables developers to stage/unstage individual files inside dirty repositories and commit changes directly from the GUI.
