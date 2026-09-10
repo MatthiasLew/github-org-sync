@@ -42,6 +42,7 @@ from github_org_sync.services.validation_service import ValidationService
 from github_org_sync.ui.repository_table import RepositoryTable
 from github_org_sync.ui.styles import get_stylesheet
 from github_org_sync.ui.update_dialog import UpdateDialog
+from github_org_sync.ui.work_summary_tab import WorkSummaryTab
 from github_org_sync.utils.process import run_process
 from github_org_sync.workers.sync_worker import SyncWorker
 from github_org_sync.workers.update_worker import UpdateCheckWorker
@@ -518,6 +519,12 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(tab_graph_widget, "")
 
+        # =========================================================================
+        # TAB 4: WORK SUMMARY
+        # =========================================================================
+        self.tab_summary = WorkSummaryTab(self)
+        self.tabs.addTab(self.tab_summary, "")
+
         # Setup Menu Bar
         self._setup_menu_bar()
 
@@ -674,6 +681,9 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(0, _t("tab_sync"))
         self.tabs.setTabText(1, _t("tab_logs"))
         self.tabs.setTabText(2, _t("tab_graph"))
+        self.tabs.setTabText(3, _t("tab_summary"))
+        if hasattr(self, "tab_summary"):
+            self.tab_summary.retranslate_ui()
         self.label_graph_repo.setText(_t("graph_repo_label"))
         self.label_graph_limit.setText(_t("graph_limit_label"))
         self.graph_all_branches_cb.setText(_t("graph_all_branches"))

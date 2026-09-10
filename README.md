@@ -4,7 +4,8 @@
 
 ![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
 
-## Latest Features (v1.4 - v1.9)
+## Latest Features (v1.4 - v1.10)
+- **Monthly Work Summary & Activity Reporter (v1.10.0)**: Integrated monthly contribution analytics tab and CLI (`summary`). Queries GitHub GraphQL API for all commits and pull requests, extracts key technologies and topics, aggregates per-project statistics, and exports clean Markdown / JSON reports. Supports filtering by specific organization or global contributions.
 - **Git LFS Status Monitor (v1.9.0)**: Automatic LFS detection, `[LFS]` badges, and interactive inspection dialog (`git lfs ls-files` / `git lfs status`).
 - **Visual History Log Graph (v1.8.0)**: Interactive commit history tree tab and dialog with ASCII branching graphs (`git log --graph --oneline --decorate --all`).
 - **Prune Stale Branches (v1.7.0)**: Identify and clean up remote-pruned tracking refs (`git remote prune origin`) and stale/merged local branches.
@@ -85,6 +86,11 @@ Sync (clone and update) repositories:
 python -m github_org_sync.cli sync --org subactor --workspace C:\Users\Praca\fork\subactor
 ```
 Add `--dry-run` to run without performing any local modifications.
+
+Generate monthly work summary (Markdown and JSON):
+```bash
+python -m github_org_sync.cli summary --month 2026-08 --org subactor --md report.md --json report.json
+```
 
 ## Running Tests
 Run the test suite using:

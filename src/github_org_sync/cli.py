@@ -84,10 +84,71 @@ def main(argv: list[str] | None = None) -> int:
     sync_parser.add_argument("--fetch-only", action="store_true", help="Only fetch changes without merging/pulling")
     sync_parser.add_argument("--dry-run", action="store_true", help="Perform a dry run without changing local files")
 
+    # 4. 'summary' command
+    summary_parser = subparsers.add_parser(
+        "summary",
+        help="Generate monthly GitHub work summary (commits, PRs, technologies)",
+    )
+    summary_parser.add_argument("--month", required=True, help="Month as YYYY-MM (e.g. 2026-08)")
+    summary_parser.add_argument("--org", default=None, help="Filter to specific GitHub organization")
+    summary_parser.add_argument("--user", default=None, help="Override GitHub login (defaults to current user)")
+    summary_parser.add_argument("--exclude", default=None, help="Owner login to ignore (e.g. personal account)")
+    summary_parser.add_argument("--md", default=None, help="Markdown output file path")
+    summary_parser.add_argument("--json", default=None, help="Raw JSON output file path")
+
     args = parser.parse_args(argv)
 
     if not args.command:
         parser.print_help()
+        return EXIT_OK
+
+    if args.command == "summary":
+        from github_org_sync.services.work_summary_service import WorkSummaryService
+
+        summary_service = WorkSummaryService()
+        if not summary_service.check_gh():
+            print("ERROR: GitHub CLI (gh) not found or not installed.", file=sys.stderr)
+            return EXIT_ERROR
+
+        try:
+            year, month = summary_service.parse_month(args.month)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+
+        try:
+            user = args.user or summary_service.get_current_user()
+        except Exception as exc:
+            print(f"ERROR: Failed to retrieve authenticated user: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+
+        print(f"Generating monthly work summary for {user} ({year}-{month:02d})...")
+        try:
+            summary_result = summary_service.generate_summary(
+                login=user,
+                year=year,
+                month=month,
+                excluded_owner=args.exclude,
+                target_org=args.org,
+            )
+        except Exception as exc:
+            print(f"ERROR: Failed to generate summary: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+
+        saved_md, saved_json = summary_service.save_reports(
+            summary_result,
+            md_path=args.md,
+            json_path=args.json,
+        )
+
+        if saved_md:
+            print(f"Saved Markdown report: {saved_md}")
+        else:
+            print("\n" + summary_service.generate_markdown(summary_result))
+
+        if saved_json:
+            print(f"Saved JSON data: {saved_json}")
+
         return EXIT_OK
 
     gh_service = GitHubService()
