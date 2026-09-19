@@ -1,16 +1,14 @@
+from __future__ import annotations
+
 import json
 import shutil
 import subprocess
 
 from github_org_sync.models.repository import Repository
 from github_org_sync.utils.process import run_process
+from github_org_sync.utils.security import scrub_secrets
 
-
-def _scrub_secrets(text: str) -> str:
-    """Redacts potential GitHub CLI tokens from error outputs."""
-    import re
-
-    return re.sub(r"gh[op]_[a-zA-Z0-9]+", "[REDACTED_TOKEN]", text)
+_scrub_secrets = scrub_secrets
 
 
 class GitHubServiceError(Exception):

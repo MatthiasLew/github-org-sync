@@ -10,11 +10,9 @@ from typing import Any
 
 from github_org_sync.services.summary_analyzer import analyze_contributions
 from github_org_sync.utils.process import run_process
+from github_org_sync.utils.security import scrub_secrets
 
-
-def _scrub_secrets(text: str) -> str:
-    """Redacts potential GitHub CLI tokens from error outputs."""
-    return re.sub(r"gh[op]_[a-zA-Z0-9]+", "[REDACTED_TOKEN]", text)
+_scrub_secrets = scrub_secrets
 
 
 class WorkSummaryError(Exception):

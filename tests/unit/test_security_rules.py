@@ -71,3 +71,46 @@ def test_no_direct_subprocess_calls() -> None:
                         violations.append(f"{path.relative_to(src_dir)}: import {name.name} from subprocess")
 
     assert not violations, f"Direct subprocess calls found in source files: {violations}"
+
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_scrub_secrets_all_token_types() -> None:
+    from github_org_sync.utils.security import scrub_secrets
+
+    # 1. Classic personal access token (ghp_)
+    raw1 = "Error during push with token: ghp_1234567890abcdef1234567890abcdef1234"
+    assert scrub_secrets(raw1) == "Error during push with token: [REDACTED_TOKEN]"
+
+    # 2. OAuth token (gho_)
+    raw2 = "gho_abcdef1234567890abcdef1234567890"
+    assert scrub_secrets(raw2) == "[REDACTED_TOKEN]"
+
+    # 3. User-to-server token (ghu_)
+    raw3 = "ghu_userToken12345678901234567890"
+    assert scrub_secrets(raw3) == "[REDACTED_TOKEN]"
+
+    # 4. Server-to-server token (ghs_)
+    raw4 = "ghs_serverToken123456789012345678"
+    assert scrub_secrets(raw4) == "[REDACTED_TOKEN]"
+
+    # 5. Refresh token (ghr_)
+    raw5 = "ghr_refreshToken12345678901234567"
+    assert scrub_secrets(raw5) == "[REDACTED_TOKEN]"
+
+    # 6. Fine-grained PAT (github_pat_)
+    raw6 = "github_pat_11ABCD_1234567890abcdefghijklmnopqrstuvwxyz"
+    assert scrub_secrets(raw6) == "[REDACTED_TOKEN]"
+
+    # 7. Embedded URL credentials
+    raw7 = "fatal: repository 'https://x-access-token:ghs_secret123456789@github.com/org/repo.git' not found"
+    clean7 = scrub_secrets(raw7)
+    assert "ghs_secret" not in clean7
+    assert "https://x-access-token:[REDACTED]@github.com/org/repo.git" in clean7
+
+    # 8. Authorization Bearer header
+    raw8 = "Authorization: Bearer mySecretToken12345678"
+    assert scrub_secrets(raw8) == "Authorization: Bearer [REDACTED_TOKEN]"
+
+    # 9. None or empty
+    assert scrub_secrets("") == ""

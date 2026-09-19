@@ -19,12 +19,12 @@ from PySide6.QtWidgets import (
 
 from github_org_sync import __version__
 from github_org_sync.i18n import _t
-from github_org_sync.services.report_service import _scrub_secrets
+from github_org_sync.utils.security import scrub_secrets
 
 
 def sanitize_error_text(text: str) -> str:
     """Redacts secrets and replaces the local user home directory to preserve privacy."""
-    text = _scrub_secrets(text)
+    text = scrub_secrets(text)
     try:
         home_path = str(Path.home())
         if home_path:
