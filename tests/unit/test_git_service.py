@@ -126,18 +126,18 @@ def test_get_local_status_diverged(mock_is_repo: MagicMock, mock_run: MagicMock,
         assert behind == 3
 
 
+@patch.object(GitService, "is_git_repository", return_value=True)
 @patch.object(GitService, "_run_git")
-def test_clone_success(mock_run: MagicMock, git_service: GitService) -> None:
+def test_clone_success(mock_run: MagicMock, mock_is_git: MagicMock, git_service: GitService) -> None:
     mock_run.return_value = MagicMock(returncode=0)
     repo = Repository(name="myrepo", url="https://github.com/org/myrepo", ssh_url="git@github.com:org/myrepo.git")
 
-    with patch("pathlib.Path.mkdir") as mock_mkdir:
+    with patch("pathlib.Path.mkdir"), patch("pathlib.Path.replace"), patch("pathlib.Path.exists", return_value=False):
         res = git_service.clone(repo, Path("/dummy/myrepo"), use_ssh=False, dry_run=False)
         assert res.performed_action == "CLONED"
         assert res.requested_action == "CLONE"
-        mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
-        dest_path_str = str(Path("/dummy/myrepo"))
-        mock_run.assert_called_once_with(None, ["clone", "https://github.com/org/myrepo", dest_path_str])
+        mock_run.assert_called_once()
+        assert mock_run.call_args[0][1][:2] == ["clone", "https://github.com/org/myrepo"]
 
 
 @patch.object(GitService, "get_local_status")

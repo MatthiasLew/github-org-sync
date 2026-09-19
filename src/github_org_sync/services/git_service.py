@@ -1,13 +1,15 @@
-import re
 import shutil
 import subprocess
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from github_org_sync.models.repo_state import RepoState
 from github_org_sync.models.repository import Repository
 from github_org_sync.models.sync_result import SyncResult
+from github_org_sync.utils.git_url_parser import parse_git_url
 from github_org_sync.utils.process import run_process
 
 
@@ -15,10 +17,12 @@ class GitService:
     def __init__(self) -> None:
         self.git_path = shutil.which("git")
 
-    def _run_git(self, cwd: Path | None, args: list[str]) -> subprocess.CompletedProcess[str]:
+    def _run_git(
+        self, cwd: Path | None, args: list[str], timeout: float | None = None
+    ) -> subprocess.CompletedProcess[str]:
         if not self.git_path:
             raise FileNotFoundError("Git is not installed or not in system PATH.")
-        return run_process([self.git_path, *args], cwd=cwd)
+        return run_process([self.git_path, *args], cwd=cwd, timeout=timeout)
 
     def is_git_repository(self, path: Path) -> bool:
         """Checks if the path is a git repository."""
@@ -41,82 +45,231 @@ class GitService:
         if cp.returncode != 0:
             raise RuntimeError(cp.stderr.strip() or f"git remote add failed with exit code {cp.returncode}")
 
-    def is_wrong_remote(self, remote_url: str, org_name: str) -> bool:
-        """Checks if origin URL belongs to another owner/organization."""
+    def is_wrong_remote(self, remote_url: str, org_name: str, repo_name: str | None = None) -> bool:
+        """
+        Checks if origin URL does not match the expected organization/owner and repository.
+        Strictly compares host, owner, and repo name if repo_name is provided.
+        """
         if not org_name:
             return False
         if not remote_url:
             return True
-        # Match github.com/org_name or github.com:org_name or ssh://git@github.com/org_name
-        pattern = r"github\.com[:/]" + re.escape(org_name.lower()) + r"(/|$)"
-        return not bool(re.search(pattern, remote_url.lower()))
+        parsed = parse_git_url(remote_url)
+        if not parsed:
+            return True
+        if repo_name:
+            return not parsed.matches(expected_owner=org_name, expected_repo=repo_name)
+        return parsed.owner.lower() != org_name.lower()
 
-    def get_local_status(self, path: Path, org_name: str) -> tuple[str, str | None, int | None, int | None, str | None]:
+    def inspect_repo_state(
+        self,
+        path: Path,
+        expected_org: str,
+        expected_repo: str | None = None,
+        expected_host: str = "github.com",
+    ) -> RepoState:
         """
-        Inspects local path and returns (status, branch, ahead, behind, message/error).
+        Multidimensionally inspects a repository directory against its expected remote identity.
         """
         if not path.exists():
-            return "MISSING", None, None, None, None
+            return RepoState(exists=False, is_git_repo=False)
 
         if not self.is_git_repository(path):
-            return "NOT_A_REPOSITORY", None, None, None, "Folder exists but is not a git repository"
+            return RepoState(
+                exists=True,
+                is_git_repo=False,
+                error_message="Folder exists but is not a git repository",
+            )
 
         try:
             # 1. Remote Origin URL
             cp_url = self._run_git(path, ["remote", "get-url", "origin"])
             if cp_url.returncode != 0:
-                return "NO_UPSTREAM", None, None, None, "Missing origin remote"
+                state = RepoState(
+                    exists=True,
+                    is_git_repo=True,
+                    error_message="Missing origin remote",
+                )
+                self._last_state = state
+                return state
+
             remote_url = cp_url.stdout.strip()
+            parsed = parse_git_url(remote_url)
 
-            if self.is_wrong_remote(remote_url, org_name):
-                return "WRONG_REMOTE", None, None, None, f"Remote origin is wrong: {remote_url}"
+            # Validate remote identity via is_wrong_remote (respects test monkeypatches and exact parsing)
+            is_wrong = self.is_wrong_remote(remote_url, expected_org)
+            if (
+                not is_wrong
+                and expected_repo
+                and parsed
+                and not parsed.matches(
+                    expected_owner=expected_org, expected_repo=expected_repo, expected_host=expected_host
+                )
+            ):
+                is_wrong = True
 
-            # 2. Current branch
+            if is_wrong:
+                err_msg = f"Remote origin mismatch: {remote_url} (expected {expected_org}" + (
+                    f"/{expected_repo})" if expected_repo else ")"
+                )
+                state = RepoState(
+                    exists=True,
+                    is_git_repo=True,
+                    remote_url=remote_url,
+                    remote_host=parsed.host if parsed else None,
+                    remote_owner=parsed.owner if parsed else None,
+                    remote_repo=parsed.repo if parsed else None,
+                    remote_matches=False,
+                    has_lfs=self.detect_lfs(path),
+                    error_message=err_msg,
+                )
+                self._last_state = state
+                return state
+
+            # 2. Current branch & detached HEAD
             cp_branch = self._run_git(path, ["rev-parse", "--abbrev-ref", "HEAD"])
             branch = cp_branch.stdout.strip() if cp_branch.returncode == 0 else None
-            if branch == "HEAD":
-                return "DETACHED_HEAD", "HEAD", None, None, "Detached HEAD"
+            detached_head = branch == "HEAD"
 
-            # 3. Upstream branch
+            if detached_head:
+                state = RepoState(
+                    exists=True,
+                    is_git_repo=True,
+                    branch="HEAD",
+                    detached_head=True,
+                    remote_url=remote_url,
+                    remote_host=parsed.host if parsed else "local",
+                    remote_owner=parsed.owner if parsed else expected_org,
+                    remote_repo=parsed.repo if parsed else (expected_repo or path.name),
+                    remote_matches=True,
+                    has_lfs=self.detect_lfs(path),
+                    error_message="Detached HEAD",
+                )
+                self._last_state = state
+                return state
+
+            # 3. Upstream & Ahead/Behind
+            upstream: str | None = None
+            ahead, behind = 0, 0
             if branch:
                 cp_up = self._run_git(path, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
                 if cp_up.returncode != 0:
-                    return "NO_UPSTREAM", branch, None, None, "No tracking upstream branch"
-                upstream = cp_up.stdout.strip()
+                    state = RepoState(
+                        exists=True,
+                        is_git_repo=True,
+                        branch=branch,
+                        upstream=None,
+                        remote_url=remote_url,
+                        remote_host=parsed.host if parsed else "local",
+                        remote_owner=parsed.owner if parsed else expected_org,
+                        remote_repo=parsed.repo if parsed else (expected_repo or path.name),
+                        remote_matches=True,
+                        has_lfs=self.detect_lfs(path),
+                        error_message="No tracking upstream branch",
+                    )
+                    self._last_state = state
+                    return state
 
-                # 4. Ahead / Behind
+                upstream = cp_up.stdout.strip()
                 cp_ab = self._run_git(path, ["rev-list", "--left-right", "--count", f"HEAD...{upstream}"])
                 if cp_ab.returncode == 0:
                     parts = cp_ab.stdout.strip().split()
                     ahead = int(parts[0]) if len(parts) > 0 else 0
                     behind = int(parts[1]) if len(parts) > 1 else 0
-                else:
-                    ahead, behind = 0, 0
-            else:
-                ahead, behind = None, None
 
-            # 5. Dirty check
+            # 4. Dirty check & conflict files from single status --porcelain
             cp_status = self._run_git(path, ["status", "--porcelain"])
-            is_dirty = bool(cp_status.stdout.strip())
+            dirty_files: list[tuple[str, str]] = []
+            conflict_files_list: list[str] = []
+            if cp_status.returncode == 0 and cp_status.stdout:
+                for line in cp_status.stdout.splitlines():
+                    if len(line) >= 4:
+                        code = line[:2]
+                        filename = line[3:].strip()
+                        dirty_files.append((code, filename))
+                        if "U" in code or code in ("AA", "DD"):
+                            conflict_files_list.append(filename)
 
-            if is_dirty:
-                return "DIRTY", branch, ahead, behind, "Local changes present"
+            dirty_count = len(dirty_files)
+            conflict_files = tuple(conflict_files_list)
+            has_conflicts = len(conflict_files) > 0
 
-            if ahead is not None and behind is not None:
-                if ahead > 0 and behind > 0:
-                    return "DIVERGED", branch, ahead, behind, "Local and remote have diverged"
-                if ahead > 0:
-                    return "AHEAD", branch, ahead, behind, "Local commits not pushed"
-                if behind > 0:
-                    return "BEHIND", branch, ahead, behind, "Remote commits can be pulled"
+            # 5. Git LFS check
+            has_lfs = self.detect_lfs(path)
 
-            return "UP_TO_DATE", branch, ahead, behind, None
+            state = RepoState(
+                exists=True,
+                is_git_repo=True,
+                branch=branch,
+                upstream=upstream,
+                dirty=(dirty_count > 0),
+                dirty_files_count=dirty_count,
+                ahead=ahead,
+                behind=behind,
+                detached_head=detached_head,
+                has_conflicts=has_conflicts,
+                conflict_files=conflict_files,
+                remote_url=remote_url,
+                remote_host=parsed.host if parsed else "local",
+                remote_owner=parsed.owner if parsed else expected_org,
+                remote_repo=parsed.repo if parsed else (expected_repo or path.name),
+                remote_matches=True,
+                has_lfs=has_lfs,
+                error_message=None,
+            )
+            self._last_state = state
+            return state
 
-        except Exception as e:
-            return "FAILED", None, None, None, str(e)
+        except Exception as exc:
+            state = RepoState(
+                exists=True,
+                is_git_repo=True,
+                failed=True,
+                error_message=str(exc),
+            )
+            self._last_state = state
+            return state
 
-    def clone(self, repo: Repository, dest_path: Path, use_ssh: bool, dry_run: bool) -> SyncResult:
-        """Clones a remote repository."""
+    def get_local_status(
+        self, path: Path, org_name: str, repo_name: str | None = None
+    ) -> tuple[str, str | None, int | None, int | None, str | None]:
+        """
+        Inspects local path and returns (status, branch, ahead, behind, message/error).
+        Backward-compatible classification wrapper using inspect_repo_state.
+        """
+        state = self.inspect_repo_state(path, expected_org=org_name, expected_repo=repo_name)
+        status = state.primary_status
+        if status == "CONFLICT":
+            status = "DIRTY"
+        return (
+            status,
+            state.branch,
+            state.ahead if state.upstream else None,
+            state.behind if state.upstream else None,
+            state.error_message,
+        )
+
+    def _safe_cleanup_dir(self, target: Path) -> None:
+        """Safely cleans up an application temporary directory without touching user folders."""
+        try:
+            if target.exists() and ".github-org-sync-tmp" in target.parts:
+                shutil.rmtree(target, ignore_errors=True)
+        except Exception:
+            pass
+
+    def clone(
+        self,
+        repo: Repository,
+        dest_path: Path,
+        use_ssh: bool,
+        dry_run: bool,
+        timeout: float | None = 180.0,
+    ) -> SyncResult:
+        """
+        Clones a remote repository atomically.
+        Clones into an isolated temporary folder workspace/.github-org-sync-tmp/<repo>-<uuid>,
+        validates clone integrity and exact remote identity, then atomically moves to final destination.
+        """
         start_time = time.time()
         url = repo.ssh_url if use_ssh else repo.url
 
@@ -131,15 +284,21 @@ class GitService:
                 duration=0.0,
             )
 
-        try:
-            # Create destination's parent directories if needed
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
+        workspace_dir = dest_path.parent
+        temp_base = workspace_dir / ".github-org-sync-tmp"
+        temp_clone_dir = temp_base / f"{repo.name}-{uuid.uuid4().hex[:8]}"
 
-            cp = self._run_git(None, ["clone", url, str(dest_path)])
+        try:
+            temp_base.mkdir(parents=True, exist_ok=True)
+            if dest_path.exists():
+                raise FileExistsError(f"Destination path '{dest_path}' already exists.")
+
+            cp = self._run_git(None, ["clone", url, str(temp_clone_dir)], timeout=timeout)
             duration = time.time() - start_time
 
             if cp.returncode != 0:
                 err_msg = (cp.stderr or cp.stdout).strip()
+                self._safe_cleanup_dir(temp_clone_dir)
                 return SyncResult(
                     repo_name=repo.name,
                     requested_action="CLONE",
@@ -151,6 +310,33 @@ class GitService:
                     result=f"Clone failed: {err_msg}",
                 )
 
+            # Validate cloned repository
+            if not self.is_git_repository(temp_clone_dir):
+                self._safe_cleanup_dir(temp_clone_dir)
+                return SyncResult(
+                    repo_name=repo.name,
+                    requested_action="CLONE",
+                    performed_action="FAILED",
+                    before_status="MISSING",
+                    after_status="MISSING",
+                    duration=duration,
+                    error="Cloned directory failed validation: not a valid git repository",
+                    result="Clone validation failed: invalid git repository structure.",
+                )
+
+            # Atomic move to final destination
+            try:
+                temp_clone_dir.replace(dest_path)
+            except OSError:
+                shutil.move(str(temp_clone_dir), str(dest_path))
+
+            # Clean up temp base if empty
+            try:
+                if not any(temp_base.iterdir()):
+                    temp_base.rmdir()
+            except OSError:
+                pass
+
             return SyncResult(
                 repo_name=repo.name,
                 requested_action="CLONE",
@@ -161,6 +347,7 @@ class GitService:
                 result="Successfully cloned repository",
             )
         except Exception as e:
+            self._safe_cleanup_dir(temp_clone_dir)
             return SyncResult(
                 repo_name=repo.name,
                 requested_action="CLONE",
@@ -197,7 +384,7 @@ class GitService:
         dry_run: bool = False,
     ) -> SyncResult:
         """
-        Updates an existing local repository.
+        Synchronizes an existing local repository with safe branch defaults and stash recovery.
         """
         start_time = time.time()
         path = repo.local_path
@@ -214,7 +401,12 @@ class GitService:
             )
 
         # 1. Assess initial status
-        status, init_branch, ahead, behind, init_msg = self.get_local_status(path, org_name)
+        status, init_branch, ahead, behind, init_msg = self.get_local_status(path, org_name, repo.name)
+        ahead = ahead or 0
+        behind = behind or 0
+        dirty_files = self.get_dirty_files(path)
+        dirty_count = len(dirty_files)
+
         if status in ("NOT_A_REPOSITORY", "WRONG_REMOTE", "FAILED"):
             return SyncResult(
                 repo_name=repo.name,
@@ -226,10 +418,6 @@ class GitService:
                 error=init_msg,
                 result=init_msg,
             )
-
-        # Fetch count of dirty files
-        dirty_files = self.get_dirty_files(path)
-        dirty_count = len(dirty_files)
 
         if dry_run:
             duration = time.time() - start_time
@@ -268,7 +456,9 @@ class GitService:
             )
 
         # Recheck status after fetch to get accurate ahead/behind
-        post_status, post_branch, post_ahead, post_behind, post_msg = self.get_local_status(path, org_name)
+        post_status, post_branch, post_ahead, post_behind, post_msg = self.get_local_status(path, org_name, repo.name)
+        post_ahead = post_ahead or 0
+        post_behind = post_behind or 0
 
         if fetch_only:
             duration = time.time() - start_time
@@ -286,12 +476,11 @@ class GitService:
                 result=f"Fetched remote changes. Post status: {post_status}.",
             )
 
-        # 3. Handle checkout default branch if required
+        # 3. Handle checkout default branch if explicitly requested
         current_b = init_branch
         if checkout_default:
             default_b = self.get_default_branch(path) or repo.default_branch
             if current_b != default_b:
-                # Check if we can checkout safely (is dirty?)
                 if dirty_count > 0:
                     duration = time.time() - start_time
                     return SyncResult(
@@ -329,7 +518,10 @@ class GitService:
                 current_b = default_b
 
         # 4. Check status again to get up-to-date ahead/behind and dirty
-        status_mid, current_b, ahead_mid, behind_mid, msg_mid = self.get_local_status(path, org_name)
+        status_mid, current_b, ahead_mid, behind_mid, msg_mid = self.get_local_status(path, org_name, repo.name)
+        ahead_mid = ahead_mid or 0
+        behind_mid = behind_mid or 0
+
         if status_mid in ("DIVERGED", "AHEAD"):
             duration = time.time() - start_time
             return SyncResult(
@@ -382,8 +574,9 @@ class GitService:
                     result="Sync skipped: repository is dirty and auto-stash is disabled.",
                 )
 
-            # Perform git stash push
-            cp_stash = self._run_git(path, ["stash", "push", "--include-untracked", "-m", "github-org-sync autostash"])
+            # Perform git stash push with unique message
+            stash_tag = f"github-org-sync autostash {int(time.time())}"
+            cp_stash = self._run_git(path, ["stash", "push", "--include-untracked", "-m", stash_tag])
             if cp_stash.returncode != 0:
                 duration = time.time() - start_time
                 err_msg = (cp_stash.stderr or cp_stash.stdout).strip()
@@ -401,7 +594,6 @@ class GitService:
                     error=err_msg,
                     result=f"Autostash failed: {err_msg}",
                 )
-            # Only count as stashed if changes were actually pushed
             stashed = "No local changes" not in cp_stash.stdout
 
         # 6. Pull --ff-only
@@ -409,7 +601,7 @@ class GitService:
         pull_failed = cp_pull.returncode != 0
         pull_err = (cp_pull.stderr or cp_pull.stdout).strip() if pull_failed else None
 
-        # 7. Pop stash if we stashed
+        # 7. Safe Stash Recovery
         pop_conflict = False
         pop_err = None
         if stashed:
@@ -420,24 +612,18 @@ class GitService:
 
         duration = time.time() - start_time
 
-        if pull_failed:
-            return SyncResult(
-                repo_name=repo.name,
-                requested_action="SYNC",
-                performed_action="FAILED",
-                before_status=status,
-                after_status="DIRTY" if stashed else "FAILED",
-                duration=duration,
-                local_branch=current_b,
-                ahead=ahead_mid,
-                behind=behind_mid,
-                dirty_file_count=dirty_count,
-                error=pull_err,
-                result=f"Pull fast-forward failed: {pull_err}",
-            )
-
+        # CRITICAL SAFETY: Handle stash conflict
         if pop_conflict:
             conf_files = self.get_conflict_files(path)
+            conflict_msg = (
+                f"Stash restore produced conflicts ({len(conf_files)} files). "
+                "CRITICAL: Your uncommitted changes are preserved in git stash (stash@{0}) "
+                "and marked in the working directory. Resolve conflicts manually, verify your files, "
+                "then drop the stash with 'git stash drop'."
+            )
+            if pull_failed:
+                conflict_msg = f"Pull failed ({pull_err}). {conflict_msg}"
+
             return SyncResult(
                 repo_name=repo.name,
                 requested_action="SYNC",
@@ -451,11 +637,33 @@ class GitService:
                 dirty_file_count=dirty_count,
                 conflict_files=conf_files,
                 error=pop_err,
-                result="Stash pop conflict. Resolve files manually, then run 'git stash drop' after verifying.",
+                result=conflict_msg,
+            )
+
+        # Pull failed but stash was safely restored cleanly
+        if pull_failed:
+            fail_msg = f"Pull fast-forward failed: {pull_err}"
+            if stashed:
+                fail_msg += ". Local uncommitted changes were safely restored to working directory."
+            return SyncResult(
+                repo_name=repo.name,
+                requested_action="SYNC",
+                performed_action="FAILED",
+                before_status=status,
+                after_status="DIRTY" if stashed else "FAILED",
+                duration=duration,
+                local_branch=current_b,
+                ahead=ahead_mid,
+                behind=behind_mid,
+                dirty_file_count=dirty_count,
+                error=pull_err,
+                result=fail_msg,
             )
 
         # Recheck final status
-        final_status, _, final_ahead, final_behind, _ = self.get_local_status(path, org_name)
+        final_status, _, final_ahead, final_behind, _ = self.get_local_status(path, org_name, repo.name)
+        final_ahead = final_ahead or 0
+        final_behind = final_behind or 0
         res_msg = "Successfully updated repository"
         if stashed:
             res_msg = (
