@@ -69,7 +69,9 @@ def test_check_local_statuses(sync_service: SyncService, mock_git_service: Magic
 
 
 @pytest.mark.unit
-def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_service: MagicMock) -> None:
+def test_sync_repositories_clone_and_skip(
+    sync_service: SyncService, mock_git_service: MagicMock, tmp_path: Path
+) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
         Repository("repo2", "url2", "ssh2", status="WRONG_REMOTE"),
@@ -95,7 +97,7 @@ def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_se
         result="Sync",
     )
 
-    workspace = Path("/dummy/workspace")
+    workspace = tmp_path / "workspace"
     results = sync_service.sync_repositories(repos, workspace, "org", {"use_ssh": False})
 
     assert len(results) == 3
@@ -115,14 +117,14 @@ def test_sync_repositories_clone_and_skip(sync_service: SyncService, mock_git_se
 
 
 @pytest.mark.unit
-def test_sync_repositories_empty_queue(sync_service: SyncService) -> None:
-    workspace = Path("/dummy/workspace")
+def test_sync_repositories_empty_queue(sync_service: SyncService, tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
     results = sync_service.sync_repositories([], workspace, "org", {})
     assert results == []
 
 
 @pytest.mark.unit
-def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_service: MagicMock) -> None:
+def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_service: MagicMock, tmp_path: Path) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
         Repository("repo2", "url2", "ssh2", status="MISSING"),
@@ -146,7 +148,7 @@ def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_serv
         call_count += 1
         return call_count > 1
 
-    workspace = Path("/dummy/workspace")
+    workspace = tmp_path / "workspace"
     results = sync_service.sync_repositories(
         repos, workspace, "org", {"use_ssh": False}, is_cancelled_callback=is_cancelled
     )
@@ -157,13 +159,13 @@ def test_sync_repositories_cancellation(sync_service: SyncService, mock_git_serv
 
 
 @pytest.mark.unit
-def test_sync_repositories_cancel_before_sync(sync_service: SyncService) -> None:
+def test_sync_repositories_cancel_before_sync(sync_service: SyncService, tmp_path: Path) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
         Repository("repo2", "url2", "ssh2", status="MISSING"),
     ]
     # Cancel immediately
-    workspace = Path("/dummy/workspace")
+    workspace = tmp_path / "workspace"
     results = sync_service.sync_repositories(
         repos, workspace, "org", {"use_ssh": False}, is_cancelled_callback=lambda: True
     )
@@ -174,7 +176,7 @@ def test_sync_repositories_cancel_before_sync(sync_service: SyncService) -> None
 
 
 @pytest.mark.unit
-def test_sync_repositories_dry_run(sync_service: SyncService, mock_git_service: MagicMock) -> None:
+def test_sync_repositories_dry_run(sync_service: SyncService, mock_git_service: MagicMock, tmp_path: Path) -> None:
     repos = [
         Repository("repo1", "url1", "ssh1", status="MISSING"),
     ]
@@ -189,7 +191,7 @@ def test_sync_repositories_dry_run(sync_service: SyncService, mock_git_service: 
         result="[DRY-RUN]",
     )
 
-    workspace = Path("/dummy/workspace")
+    workspace = tmp_path / "workspace"
     results = sync_service.sync_repositories(repos, workspace, "org", {"dry_run": True})
     assert len(results) == 1
     assert results[0].performed_action == "NO_CHANGE"

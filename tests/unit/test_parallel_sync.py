@@ -9,7 +9,7 @@ from github_org_sync.services.sync_service import SyncService
 
 
 @pytest.mark.unit
-def test_parallel_check_local_statuses() -> None:
+def test_parallel_check_local_statuses(tmp_path: Path) -> None:
     git_service_mock = MagicMock()
 
     def mock_get_status(path, org):
@@ -54,7 +54,7 @@ def test_parallel_check_local_statuses() -> None:
     sync_service = SyncService(git_service=git_service_mock)
     sync_service.check_local_statuses(
         repositories=repos,
-        workspace=Path("/workspace"),
+        workspace=tmp_path / "workspace",
         org_name="my-org",
         progress_callback=progress_cb,
         max_workers=2,
@@ -75,7 +75,7 @@ def test_parallel_check_local_statuses() -> None:
 
 
 @pytest.mark.unit
-def test_parallel_sync_repositories() -> None:
+def test_parallel_sync_repositories(tmp_path: Path) -> None:
     git_service_mock = MagicMock()
 
     # Mock clone for MISSING repos
@@ -120,7 +120,7 @@ def test_parallel_sync_repositories() -> None:
     sync_service = SyncService(git_service=git_service_mock)
     results = sync_service.sync_repositories(
         repositories=repos,
-        workspace=Path("/workspace"),
+        workspace=tmp_path / "workspace",
         org_name="my-org",
         options={"use_ssh": False},
         max_workers=2,
@@ -136,7 +136,7 @@ def test_parallel_sync_repositories() -> None:
 
 
 @pytest.mark.unit
-def test_parallel_sync_cancellation() -> None:
+def test_parallel_sync_cancellation(tmp_path: Path) -> None:
     git_service_mock = MagicMock()
 
     repos = [
@@ -164,7 +164,7 @@ def test_parallel_sync_cancellation() -> None:
     sync_service = SyncService(git_service=git_service_mock)
     results = sync_service.sync_repositories(
         repositories=repos,
-        workspace=Path("/workspace"),
+        workspace=tmp_path / "workspace",
         org_name="my-org",
         options={},
         is_cancelled_callback=cancel_check,

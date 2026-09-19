@@ -6,7 +6,7 @@ import os
 import socket
 import sys
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -134,7 +134,8 @@ class WorkspaceLock:
 
     def acquire(self) -> None:
         """Acquires exclusive lock or raises WorkspaceLockedError with details."""
-        self.workspace.mkdir(parents=True, exist_ok=True)
+        with suppress(OSError):
+            self.workspace.mkdir(parents=True, exist_ok=True)
         try:
             self._file_lock.acquire(timeout=self.timeout)
             self._is_locked = True
@@ -145,6 +146,9 @@ class WorkspaceLock:
                 f"Workspace '{self.workspace}' is locked by another running process "
                 f"({holder_details}). Concurrent operations on the same workspace are prohibited."
             )
+            raise WorkspaceLockedError(msg) from exc
+        except OSError as exc:
+            msg = f"Cannot acquire lock on workspace '{self.workspace}': {exc}"
             raise WorkspaceLockedError(msg) from exc
 
     def release(self) -> None:
