@@ -1,106 +1,123 @@
 # GitHub Organization Repository Synchronizer
 
-`github-org-sync` is a cross-platform desktop and command-line application built with Python 3.11+, PySide6, and the GitHub CLI. It provides a visual and automated way to discover, clone, and update all repositories belonging to any GitHub organization.
+[![CI](https://github.com/MatthiasLew/github-org-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthiasLew/github-org-sync/actions/workflows/ci.yml)
+[![Release](https://github.com/MatthiasLew/github-org-sync/actions/workflows/release.yml/badge.svg)](https://github.com/MatthiasLew/github-org-sync/actions/workflows/release.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![GUI Screenshot Placeholder](docs/images/gui_screenshot.png)
+A hardened, **CLI-first** tool and optional desktop application for automated discovery, atomic cloning, deterministic planning, and safe synchronization of all repositories belonging to a GitHub organization.
 
-## Latest Features (v1.4 - v1.10)
-- **Monthly Work Summary & Activity Reporter (v1.10.0)**: Integrated monthly contribution analytics tab and CLI (`summary`). Queries GitHub GraphQL API for all commits and pull requests, extracts key technologies and topics, aggregates per-project statistics, and exports clean Markdown / JSON reports. Supports filtering by specific organization or global contributions.
-- **Git LFS Status Monitor (v1.9.0)**: Automatic LFS detection, `[LFS]` badges, and interactive inspection dialog (`git lfs ls-files` / `git lfs status`).
-- **Visual History Log Graph (v1.8.0)**: Interactive commit history tree tab and dialog with ASCII branching graphs (`git log --graph --oneline --decorate --all`).
-- **Prune Stale Branches (v1.7.0)**: Identify and clean up remote-pruned tracking refs (`git remote prune origin`) and stale/merged local branches.
-- **Git Stash Drawer / Visual Manager (v1.6.0)**: Inspect, apply/pop, drop, and push Git stashes directly from the GUI.
-- **GUI Commit & Staging Manager (v1.5.0)**: Stage/unstage individual or all modified files and commit directly within the application.
-- **Branch Switcher & Git Merge Tool (v1.4.0)**: Fast branch checkout dialog and external mergetool launcher (`git mergetool`) for conflict resolution.
+Designed to protect local work and fail closed when an operation cannot be proven safe. Your local uncommitted work and diverged branches are never overwritten or silently discarded.
 
-## New in Version 1.3.2
-- **Automatic Updates**: Added automatic update checker on startup and manual check option in the Help menu. Downloads and installs updates directly from GitHub Releases without manual intervention.
+---
 
-## New in Version 1.3.1
-- **Cross-Platform Release Packages**: Packaged native executables and binaries for Linux (`.tar.gz`) and macOS (`.zip`) along with Windows (`.zip`).
-- Cross-platform spec configurations for PyInstaller.
+## Key Highlights
 
-## New in Version 1.3.0
-- **Open Existing Workspace Mode**: Scan and inspect local Git repositories directly without specifying a GitHub organization name.
-- **Support for Non-GitHub Repositories**: Safely scan and perform local Git operations (Fetch, Update, Open, etc.) on GitLab, Bitbucket, and other self-hosted/custom Git locations.
-- **Detected Organization Auto-fill**: Automatically detects and populates the organization name if all scanned GitHub repositories belong to the same owner.
-- **Repository Grouping and Filtering**: Filter repository views by hosting platforms and owners (e.g. `GitHub / my-org`, `GitLab / project`).
-- **Workspace-to-Org Verification**: Instantly compare scanned local workspace repositories against any GitHub organization to highlight missing/extra repositories.
+- **CLI-First Architecture**: Lightweight base package without mandatory GUI dependencies (`pip install github-org-sync`). PySide6 is completely isolated in the optional `[gui]` extra.
+- **Deterministic Planning (`plan`)**: Computes a pure, deterministic `SyncPlan` showing every Git command before touching the disk.
+- **Structured JSON Envelopes (`--json`)**: Uniform, machine-readable JSON payloads and standardized exit codes (`0`, `1`, `2`, `3`) for CI/CD pipelines and AI agent workflows ([docs/CLI_CONTRACT.md](docs/CLI_CONTRACT.md)).
+- **Fail-Closed Safety Policy**: Designed to protect local work and fail closed when an operation cannot be proven safe. Force pushes (`push --force`), hard resets (`reset --hard`), and working tree wipes (`clean`) are strictly blocked at the process wrapper level ([docs/SECURITY.md](docs/SECURITY.md)).
+- **Safe Stash Recovery**: Automatic stashes (`preserve_local_changes`) are **never** dropped if restoring produces a merge conflict ([docs/RECOVERY.md](docs/RECOVERY.md)).
+- **Atomic Cloning**: Clones to an isolated temporary folder within the filesystem and performs an atomic rename upon integrity validation, preventing corrupt half-cloned directories.
+- **Workspace Concurrency Locking**: Prevents concurrent CLI/GUI processes from writing to the same workspace simultaneously, with automatic dead-PID stale lock recovery.
+- **Environment Doctor (`doctor`)**: Verifies Python runtime, Git, GitHub CLI authentication, SSH connectivity, Git LFS, workspace permissions, and locking capabilities.
+- **Monthly Contribution Analytics (`summary`)**: Aggregates commits, PRs, technologies, and project statistics via GitHub GraphQL API into Markdown and JSON reports.
+- **Optional Desktop GUI**: Modern PySide6 graphical interface with repository status monitor, Git LFS inspector, commit drawer, and visual commit graphs.
 
-## Windows Release Installation
+---
 
-To run the application on Windows without installing Python:
+## Installation
 
-1. Download the release package (`github-org-sync-v1.3.2-windows-x64.zip`) from the [Releases](https://github.com/MatthiasLew/github-org-sync/releases) page.
-2. Extract the complete archive to a directory of your choice.
-3. Run `github-org-sync.exe` inside the extracted folder.
-
-*Important:* The application still requires external command-line tools to interact with Git and GitHub. Make sure you have installed:
-* [Git](https://git-scm.com/) (verify with `git --version`)
-* [GitHub CLI (gh)](https://cli.github.com/) (verify with `gh --version`)
-
-Before synchronizing private repositories, log in via the GitHub CLI:
-```powershell
-gh auth login
-gh auth status
+### 1. Base CLI (Recommended for CI/CD, Scripts & Servers)
+```bash
+pip install github-org-sync
 ```
 
-## Developer Guide & Requirements
+### 2. Full Installation with GUI
+```bash
+pip install "github-org-sync[gui]"
+```
+
+### Prerequisites
 - Python 3.11+
 - [Git](https://git-scm.com/) installed and on PATH.
-- [GitHub CLI (gh)](https://cli.github.com/) installed and authenticated.
+- [GitHub CLI (gh)](https://cli.github.com/) installed and authenticated (`gh auth login`).
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/MatthiasLew/github-org-sync.git
-   cd github-org-sync
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   # On Windows:
-   .venv\Scripts\activate
-   # On Linux/macOS:
-   source .venv/bin/activate
-   ```
-3. Install dependencies and the package:
-   ```bash
-   pip install -e .[dev]
-   ```
+---
 
-## Running the Application
-### GUI Mode
-Run the desktop GUI via:
+## CLI Quickstart
+
+### Verify Environment
 ```bash
-python -m github_org_sync
+github-org-sync doctor --workspace /path/to/workspace
 ```
 
-### CLI Mode
-Show status of repositories:
+### Discover Repositories
 ```bash
-python -m github_org_sync.cli status --org subactor --workspace C:\Users\Praca\fork\subactor
-```
-Sync (clone and update) repositories:
-```bash
-python -m github_org_sync.cli sync --org subactor --workspace C:\Users\Praca\fork\subactor
-```
-Add `--dry-run` to run without performing any local modifications.
-
-Generate monthly work summary (Markdown and JSON):
-```bash
-python -m github_org_sync.cli summary --month 2026-08 --org subactor --md report.md --json report.json
+github-org-sync list --org my-org
 ```
 
-## Running Tests
-Run the test suite using:
+### Inspect Workspace Status
 ```bash
-python -m pytest -q
+github-org-sync status --org my-org --workspace /path/to/workspace
 ```
 
-## Packaging
-To build a standalone executable on Windows:
-```powershell
-.\scripts\build_windows.ps1
+### Generate Dry-Run Plan
+```bash
+github-org-sync plan --org my-org --workspace /path/to/workspace
 ```
-The output executable will be placed in the `dist/` directory.
+
+### Synchronize Repositories
+```bash
+# Simulation without disk modifications
+github-org-sync sync --org my-org --workspace /path/to/workspace --dry-run
+
+# Full synchronization with parallel workers
+github-org-sync sync --org my-org --workspace /path/to/workspace --jobs 4
+```
+
+### Structured JSON Output
+Append `--json` to any command for machine-readable JSON envelopes:
+```bash
+github-org-sync plan --org my-org --workspace /path/to/workspace --json
+```
+
+### Monthly Work Summary
+```bash
+github-org-sync summary --month 2026-08 --org my-org --md summary.md --json summary.json
+```
+
+### Launch GUI
+```bash
+github-org-sync gui
+# Or:
+github-org-sync-gui
+```
+
+---
+
+## Standard Exit Codes
+
+| Code | Status | Description |
+| :---: | :--- | :--- |
+| **0** | `SUCCESS` | Clean success; all operations completed cleanly. |
+| **1** | `ATTENTION` | Human attention required (uncommitted files, diverged branches, conflicts). |
+| **2** | `USAGE` | Invalid CLI arguments, organization name, or workspace path. |
+| **3** | `ERROR` | Git error, network timeout, or execution failure. |
+
+---
+
+## Documentation
+
+- [CLI Contract & JSON Schema](docs/CLI_CONTRACT.md)
+- [Security Policy & Safety Architecture](docs/SECURITY.md)
+- [Safe Recovery & Conflict Resolution Guide](docs/RECOVERY.md)
+- [Architecture & State Machine](docs/ARCHITECTURE.md)
+- [Testing & Quality Assurance](docs/TESTING.md)
+- [Release Process](docs/RELEASING.md)
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-09-19
+
+### Added
+- **CLI-First Architecture**: `github-org-sync` command runs CLI by default; optional GUI via `github-org-sync gui` or `github-org-sync-gui`.
+- **Structured JSON Contract**: Support for `--json` on `doctor`, `status`, `plan`, and `sync`.
+- **Deterministic Sync Planning**: `github-org-sync plan` and `--dry-run` provide precise operation previews.
+- **Multidimensional RepoState**: Fine-grained inspection capturing dirty files, ahead/behind counts, conflicts, detached HEAD, and upstream tracking.
+- **Strict Remote Identity Validation**: Exact matching of remote host, owner/organization, and repository name across HTTPS, SSH, and SCP URLs.
+- **Workspace Locking**: Cross-platform file locking with stale lock protection prevents race conditions.
+- **Atomic Clone**: Clones into application temp folder with validation before atomic move.
+- **Safe Stash Recovery**: Preserves local work on interrupted sync or pull failures with detailed conflict reporting.
+- **Hardened Secure Updater**: Mandatory SHA-256 verification and path-traversal (Zip Slip) protection.
+
 ## [1.9.0] - 2026-09-04
 
 ### Added
