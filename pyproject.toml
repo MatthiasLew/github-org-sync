@@ -71,14 +71,6 @@ strict_equality = true
 module = "PySide6.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "tests.*"
-check_untyped_defs = false
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-warn_return_any = false
-warn_unreachable = false
-
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --strict-markers"

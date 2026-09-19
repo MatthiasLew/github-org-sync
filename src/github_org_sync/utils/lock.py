@@ -71,20 +71,20 @@ def is_process_running(pid: int) -> bool:
     if pid <= 0:
         return False
     try:
-        if sys.platform != "win32":
-            # On Unix, signal 0 does error checking without killing
+        if sys.platform == "win32":
+            import ctypes
+
+            # PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(0x1000, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+            return False
+        else:  # noqa: RET505
+            # Unix platforms
             os.kill(pid, 0)
             return True
-
-        import ctypes
-
-        # PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(0x1000, False, pid)
-        if handle:
-            kernel32.CloseHandle(handle)
-            return True
-        return False
     except (OSError, PermissionError):
         return False
 

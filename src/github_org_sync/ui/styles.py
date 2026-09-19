@@ -559,7 +559,7 @@ def is_system_dark() -> bool:
     """Detects if system settings are set to dark mode."""
     try:
         scheme = QGuiApplication.styleHints().colorScheme()
-        return scheme == Qt.ColorScheme.Dark
+        return bool(scheme == Qt.ColorScheme.Dark)
     except Exception:
         if sys.platform == "win32":
             try:

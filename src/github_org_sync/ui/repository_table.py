@@ -32,7 +32,7 @@ class CheckboxTableWidgetItem(QTableWidgetItem):
     def __lt__(self, other: QTableWidgetItem) -> bool:
         if isinstance(other, CheckboxTableWidgetItem):
             return int(self.checkbox.isChecked()) < int(other.checkbox.isChecked())
-        return super().__lt__(other)
+        return bool(super().__lt__(other))
 
 
 class NumericTableWidgetItem(QTableWidgetItem):
@@ -112,9 +112,9 @@ class RepositoryTable(QTableWidget):
         val = item.data(Qt.ItemDataRole.UserRole)
         if val is not None:
             return str(val)
-        text = item.text()
+        text = str(item.text())
         if text.startswith("[") and "] " in text:
-            return text.split("] ", 1)[-1]
+            return str(text.split("] ", 1)[-1])
         return text
 
     def retranslate_ui(self) -> None:
