@@ -9,9 +9,41 @@ permissions:
   contents: write
 
 jobs:
+  validate-version:
+    name: Validate Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check version consistency
+        run: |
+          python -c "
+          import tomllib, sys
+          from pathlib import Path
+          tag = '${{ github.ref_name }}'.lstrip('v')
+          pyproject = tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))
+          pkg_ver = pyproject['project']['version']
+          changelog = Path('CHANGELOG.md').read_text(encoding='utf-8')
+          expected_heading = f'## [{pkg_ver}]'
+          if tag != pkg_ver:
+              print(f'ERROR: Tag version v{tag} does not match pyproject.toml version {pkg_ver}', file=sys.stderr)
+              sys.exit(1)
+          if expected_heading not in changelog:
+              print(f'ERROR: CHANGELOG.md missing heading for {expected_heading}', file=sys.stderr)
+              sys.exit(1)
+          print(f'Version validation passed: tag={tag}, pyproject={pkg_ver}, changelog={expected_heading}')
+          "
+
   release-windows:
     name: Build Windows Release Asset
     runs-on: windows-latest
+    needs: [validate-version]
 
     steps:
       - name: Checkout repository
@@ -61,6 +93,7 @@ jobs:
   release-linux:
     name: Build Linux Release Asset
     runs-on: ubuntu-latest
+    needs: [validate-version]
 
     steps:
       - name: Checkout repository
@@ -129,6 +162,7 @@ jobs:
   release-macos:
     name: Build macOS Release Asset
     runs-on: macos-latest
+    needs: [validate-version]
 
     steps:
       - name: Checkout repository

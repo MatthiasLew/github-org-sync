@@ -30,8 +30,9 @@ jobs:
           sudo apt-get install -y xvfb libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libglib2.0-0 libdbus-1-3 libfontconfig1 libxrender1 libxi6 libxcb-cursor0
 
       - name: Run Slow Tests
+        shell: bash
         run: |
-          xvfb-run pytest -m slow
+          xvfb-run pytest -m slow || if [ $? -eq 5 ]; then echo "No tests with marker 'slow' found. Skipping."; else exit 1; fi
 
   docker-matrix:
     name: Docker Matrix (${{ matrix.base-image }})
