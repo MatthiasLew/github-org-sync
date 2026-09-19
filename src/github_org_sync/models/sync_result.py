@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -19,3 +22,24 @@ class SyncResult:
     result: str | None = None
     duration: float = 0.0
     error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "repo_name": self.repo_name,
+            "requested_action": self.requested_action,
+            "performed_action": self.performed_action,
+            "before_status": self.before_status,
+            "after_status": self.after_status,
+            "local_branch": self.local_branch,
+            "upstream_branch": self.upstream_branch,
+            "ahead": self.ahead,
+            "behind": self.behind,
+            "dirty_file_count": self.dirty_file_count,
+            "conflict_files": list(self.conflict_files),
+            "user_decision": self.user_decision,
+            "backup_created": self.backup_created,
+            "result": self.result,
+            "duration": round(self.duration, 4),
+            "error": self.error,
+        }

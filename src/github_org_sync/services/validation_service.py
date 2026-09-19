@@ -39,6 +39,8 @@ class ValidationService:
 
         return cleaned
 
+    validate_org_name = normalize_org_name
+
     @staticmethod
     def validate_workspace(path_str: str) -> Path:
         """
