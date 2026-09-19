@@ -4,7 +4,6 @@ import pytest
 
 from github_org_sync.i18n import _t
 from github_org_sync.services.diagnostics_service import DiagnosticsService
-from github_org_sync.ui.diagnostics_dialog import DiagnosticsDialog
 
 
 @pytest.mark.unit
@@ -51,6 +50,7 @@ def test_diagnostics_service_all_failure() -> None:
 @pytest.mark.gui
 def test_diagnostics_dialog_ui(qtbot) -> None:
     from github_org_sync.services.diagnostics_service import DiagnosticsResult
+    from github_org_sync.ui.diagnostics_dialog import DiagnosticsDialog
 
     fake_results = [
         DiagnosticsResult("git", "Git Check", True, "Git version OK"),
