@@ -1,7 +1,3 @@
-# github-org-sync package
-try:
-    from importlib.metadata import version
+"""github-org-sync package."""
 
-    __version__ = version("github-org-sync")
-except Exception:
-    __version__ = "1.9.0"
+__version__ = "1.10.0"

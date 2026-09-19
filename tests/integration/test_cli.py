@@ -73,10 +73,12 @@ def test_cli_sync(mock_cli_services: tuple[MagicMock, MagicMock, MagicMock], tmp
 
 
 def test_cli_version(capsys: Any) -> None:
+    from github_org_sync import __version__
+
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     # Argparse may output to stdout or stderr depending on Python versions/environments
     output = captured.out or captured.err
-    assert "github-org-sync 1.3.2" in output
+    assert f"github-org-sync {__version__}" in output
