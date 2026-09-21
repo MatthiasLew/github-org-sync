@@ -67,3 +67,42 @@ def test_parse_git_url_unicode() -> None:
 def test_parse_git_url_unusual_name() -> None:
     res = parse_git_url("git@github.com:owner-name/repo_name.with-dots.git")
     assert res == {"host": "github.com", "owner": "owner-name", "repo": "repo_name.with-dots"}
+
+
+@pytest.mark.unit
+def test_parsed_git_url_methods_and_edge_cases() -> None:
+    u1 = parse_git_url("https://github.com/owner/repo.git/")
+    assert u1 is not None
+    assert u1.host == "github.com"
+    assert u1.owner == "owner"
+    assert u1.repo == "repo"
+
+    u2 = parse_git_url("git@github.com:owner/repo")
+    assert u2 is not None
+    assert u1 == u2
+    assert u1 == {"host": "github.com", "owner": "owner", "repo": "repo"}
+    assert (u1 == "not a git url") is False
+
+    # Hash
+    assert hash(u1) == hash(u2)
+
+    # __getitem__ and get
+    assert u1["host"] == "github.com"
+    assert u1["owner"] == "owner"
+    assert u1["repo"] == "repo"
+    with pytest.raises(KeyError):
+        _ = u1["nonexistent"]
+    assert u1.get("host") == "github.com"
+    assert u1.get("invalid", "default_val") == "default_val"
+
+    # matches
+    assert u1.matches(expected_owner="owner", expected_repo="repo", expected_host="github.com") is True
+    assert u1.matches(expected_owner="owner", expected_repo=None) is True
+    assert u1.matches(expected_owner="wrong_owner") is False
+    assert u1.matches(expected_owner="owner", expected_repo="wrong_repo") is False
+    assert u1.matches(expected_owner="owner", expected_host="gitlab.com") is False
+
+    # Incomplete paths (len(parts) < 2)
+    assert parse_git_url("https://github.com/onepart") is None
+    assert parse_git_url("ssh://git@github.com/onepart") is None
+    assert parse_git_url("git@github.com:onepart") is None

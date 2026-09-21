@@ -133,3 +133,89 @@ def test_workspace_lock_holder_info_corrupt_or_missing_pid(tmp_path: Path) -> No
     info_file.write_text('{"command": "orphan"}', encoding="utf-8")
     info_str = lock._read_holder_info()
     assert "status=unknown" in info_str
+
+
+@pytest.mark.unit
+def test_get_process_create_time_linux(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    # Linux valid /proc/pid/stat
+    fake_stat = tmp_path / "stat"
+    # Format: pid (comm) state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt cmajflt utime stime cutime cstime priority nice num_threads itrealvalue starttime
+    fake_stat.write_text("123 (python) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 99998888 19 20\n", encoding="utf-8")
+
+    with (
+        patch("sys.platform", "linux"),
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=fake_stat.read_text()),
+    ):
+        ctime = get_process_create_time(123)
+        assert ctime == 19
+
+    # Linux corrupt /proc/pid/stat (no closing paren)
+    with (
+        patch("sys.platform", "linux"),
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value="123 python S 1"),
+    ):
+        assert get_process_create_time(123) is None
+
+    # Linux non-existent stat
+    with patch("sys.platform", "linux"), patch("pathlib.Path.exists", return_value=False):
+        assert get_process_create_time(123) is None
+
+
+@pytest.mark.unit
+def test_is_process_running_unix() -> None:
+    from unittest.mock import patch
+
+    with patch("sys.platform", "linux"), patch("os.kill") as mock_kill:
+        # Success
+        mock_kill.return_value = None
+        assert is_process_running(123) is True
+
+        # ProcessLookupError (dead process)
+        mock_kill.side_effect = ProcessLookupError()
+        assert is_process_running(123) is False
+
+        # PermissionError (running under different user)
+        mock_kill.side_effect = PermissionError()
+        assert is_process_running(123) is False
+
+
+@pytest.mark.unit
+def test_is_process_active_fallback_closed() -> None:
+    from unittest.mock import patch
+
+    # When expected_create_time is given but query returns None, fails closed (returns True)
+    with (
+        patch("github_org_sync.utils.lock.is_process_running", return_value=True),
+        patch("github_org_sync.utils.lock.get_process_create_time", return_value=None),
+    ):
+        assert is_process_active(123, expected_create_time=55555) is True
+
+
+@pytest.mark.unit
+def test_workspace_lock_acquire_oserror(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    lock = WorkspaceLock(tmp_path, command="test:oserror")
+    with (
+        patch.object(lock._file_lock, "acquire", side_effect=OSError("Read-only filesystem")),
+        pytest.raises(WorkspaceLockedError, match="Cannot acquire lock"),
+    ):
+        lock.acquire()
+
+
+@pytest.mark.unit
+def test_workspace_lock_release_unlocked(tmp_path: Path) -> None:
+    lock = WorkspaceLock(tmp_path, command="test:noop")
+    # Release when not locked should do nothing and not fail
+    lock.release()
+    assert lock._is_locked is False
+
+
+@pytest.mark.unit
+def test_workspace_lock_read_holder_missing(tmp_path: Path) -> None:
+    lock = WorkspaceLock(tmp_path, command="test:missing")
+    assert lock._read_holder_info() == "Unknown process holding lock"

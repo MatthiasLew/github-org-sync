@@ -385,3 +385,24 @@ def test_sync_plan_metrics_and_filtering() -> None:
     assert d["updates_count"] == 1
     assert d["up_to_date_count"] == 1
     assert d["blocked_count"] == 1
+
+
+@pytest.mark.unit
+def test_sync_plan_action_summaries() -> None:
+    from github_org_sync.models.sync_plan import RepoPlan
+
+    st = RepoState(exists=True, is_git_repo=True, behind=0)
+    p_ff0 = RepoPlan(repo_name="r1", action=SyncAction.FAST_FORWARD, steps=(), reason="", state=st)
+    assert p_ff0.action_summary == "FAST_FORWARD"
+
+    p_fetch = RepoPlan(repo_name="r2", action=SyncAction.FETCH, steps=(), reason="", state=st)
+    assert p_fetch.action_summary == "FETCH"
+
+    p_skip = RepoPlan(repo_name="r3", action=SyncAction.SKIPPED, steps=(), reason="", state=st)
+    assert p_skip.action_summary == "SKIPPED"
+
+
+@pytest.mark.unit
+def test_repo_state_missing_remote_url() -> None:
+    st = RepoState(exists=True, is_git_repo=True, failed=False, remote_url="")
+    assert st.primary_status == "NO_UPSTREAM"

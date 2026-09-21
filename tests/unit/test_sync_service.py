@@ -251,3 +251,53 @@ def test_report_service_generation(tmp_path: Path) -> None:
         assert "repo1" in md_text
         assert "repo2" in md_text
         assert "gho_" not in md_text
+
+
+@pytest.mark.unit
+def test_sync_service_check_local_statuses_cancelled(sync_service: SyncService) -> None:
+    repos = [Repository("repo1", "url1", "ssh1")]
+    # Cancelled immediately
+    res = sync_service.check_local_statuses(repos, Path("/dummy"), "myorg", is_cancelled_callback=lambda: True)
+    assert len(res) == 1
+    # Status was not inspected
+    assert res[0].status == "MISSING"
+
+
+@pytest.mark.unit
+def test_sync_service_sync_repositories_cancelled_and_metadata(
+    sync_service: SyncService, mock_git_service: MagicMock, tmp_path: Path
+) -> None:
+    repos = [Repository("repo1", "url1", "ssh1", status="MISSING")]
+    progress_called = []
+
+    # Cancelled callback returns True during sync
+    res = sync_service.sync_repositories(
+        repos,
+        tmp_path,
+        "myorg",
+        options={},
+        progress_callback=lambda c, t, r, s: progress_called.append((c, t)),
+        is_cancelled_callback=lambda: True,
+    )
+    assert len(res) == 1
+    assert res[0].performed_action == "CANCELLED"
+    assert len(progress_called) == 1
+
+    # Metadata branch, ahead, behind populated
+    mock_git_service.sync.return_value = SyncResult(
+        repo_name="repo1",
+        requested_action="SYNC",
+        performed_action="UPDATED",
+        before_status="BEHIND",
+        after_status="UP_TO_DATE",
+        duration=0.5,
+        local_branch="feature-1",
+        ahead=1,
+        behind=0,
+    )
+    repos2 = [Repository("repo1", "url1", "ssh1", status="BEHIND")]
+    res2 = sync_service.sync_repositories(repos2, tmp_path, "myorg", options={})
+    assert res2[0].performed_action == "UPDATED"
+    assert repos2[0].branch == "feature-1"
+    assert repos2[0].ahead == 1
+    assert repos2[0].behind == 0
