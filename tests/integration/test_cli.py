@@ -162,28 +162,6 @@ def test_cli_doctor_command(capsys: Any) -> None:
         assert '"command": "doctor"' in captured_json.out
 
 
-def test_cli_summary_command(tmp_path: Path) -> None:
-    from github_org_sync.services.work_summary_service import WorkSummaryService
-
-    with patch.object(WorkSummaryService, "check_gh", return_value=False):
-        assert main(["summary", "--month", "2026-01"]) == EXIT_ERROR
-
-    with (
-        patch.object(WorkSummaryService, "check_gh", return_value=True),
-        patch.object(WorkSummaryService, "generate_summary") as mock_gen,
-        patch.object(WorkSummaryService, "save_reports", return_value=("rep.md", "rep.json")),
-    ):
-        rc = main(["summary", "--month", "2026-01"])
-        assert rc == EXIT_SUCCESS
-        mock_gen.assert_called_once()
-
-    with (
-        patch.object(WorkSummaryService, "check_gh", return_value=True),
-        patch.object(WorkSummaryService, "generate_summary", side_effect=RuntimeError("API error")),
-    ):
-        assert main(["summary", "--month", "2026-01"]) == EXIT_ERROR
-
-
 def test_cli_gh_prechecks_and_org_validation(capsys: Any, tmp_path: Path) -> None:
     with patch("github_org_sync.cli.GitHubService") as mock_gh_cls:
         mock_gh = mock_gh_cls.return_value

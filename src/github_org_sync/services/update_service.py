@@ -255,9 +255,9 @@ class UpdateService:
 
         expected_binary = "github-org-sync.exe" if sys.platform == "win32" else "github-org-sync"
         bin_path = app_dir / expected_binary
-        if not bin_path.exists():
+        if not bin_path.is_file():
             # Check direct extracted_root
-            if (extracted_root / expected_binary).exists():
+            if (extracted_root / expected_binary).is_file():
                 return extracted_root
             raise InvalidArchiveStructureError(
                 f"Extracted update archive does not contain expected executable '{expected_binary}'."
