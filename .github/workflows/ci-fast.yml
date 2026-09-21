@@ -62,7 +62,7 @@ jobs:
 
       - name: Run Tests with Branch Coverage
         run: |
-          pytest -m "not gui and not slow" --cov=src/github_org_sync --cov-branch --cov-report=term-missing --cov-report=json:coverage.json tests
+          xvfb-run pytest -m "not gui and not slow" --cov=src/github_org_sync --cov-branch --cov-report=term-missing --cov-report=json:coverage.json tests
 
       - name: Verify Core Branch Coverage Gate
         run: |
