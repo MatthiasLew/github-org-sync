@@ -60,9 +60,13 @@ jobs:
             libxi6 \
             libxcb-cursor0
 
-      - name: Run Fast Unit Tests
+      - name: Run Tests with Branch Coverage
         run: |
-          pytest -m unit
+          pytest -m "not gui and not slow" --cov=src/github_org_sync --cov-branch --cov-report=term-missing --cov-report=json:coverage.json tests
+
+      - name: Verify Core Branch Coverage Gate
+        run: |
+          python scripts/verify_core_coverage.py --min-branch-coverage 90.0 --min-line-coverage 90.0
 
       - name: Verify CLI Help & Version
         run: |
