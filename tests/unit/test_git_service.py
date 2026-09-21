@@ -1097,3 +1097,86 @@ def test_git_service_sync_branches(tmp_path: Path, git_service: GitService) -> N
         res_co_fail = git_service.sync(repo, "myorg", checkout_default=True)
         assert res_co_fail.performed_action == "FAILED"
         assert "Checkout main failed" in (res_co_fail.result or "")
+
+
+@pytest.mark.unit
+def test_get_default_branch_variations(git_service: GitService) -> None:
+    # 1. symbolic-ref returns origin/develop
+    with patch.object(git_service, "_run_git") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0),  # set-head
+            MagicMock(returncode=0, stdout="origin/develop\n", stderr=""),  # symbolic-ref
+        ]
+        assert git_service.get_default_branch(Path("/dummy")) == "develop"
+
+    # 2. symbolic-ref fails, origin/main fails, origin/master succeeds
+    with patch.object(git_service, "_run_git") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=1),  # set-head
+            MagicMock(returncode=1, stdout="", stderr="error"),  # symbolic-ref
+            MagicMock(returncode=1),  # rev-parse origin/main
+            MagicMock(returncode=0),  # rev-parse origin/master
+        ]
+        assert git_service.get_default_branch(Path("/dummy")) == "master"
+
+    # 3. all fail -> returns None
+    with patch.object(git_service, "_run_git") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=1),
+            MagicMock(returncode=1),
+            MagicMock(returncode=1),
+            MagicMock(returncode=1),
+        ]
+        assert git_service.get_default_branch(Path("/dummy")) is None
+
+
+@pytest.mark.unit
+def test_sync_dirty_auto_stash_failure_and_up_to_date(git_service: GitService, tmp_path: Path) -> None:
+    repo = Repository(name="test-repo", url="https://example.com/repo.git", ssh_url="git@example.com:repo.git")
+    repo_dir = tmp_path / "test-repo"
+    repo_dir.mkdir()
+    repo.local_path = repo_dir
+    git_service.workspace_path = tmp_path
+
+    # 1. status_mid is UP_TO_DATE -> returns NO_CHANGE
+    with (
+        patch.object(
+            git_service,
+            "get_local_status",
+            side_effect=[
+                ("BEHIND", "main", 0, 1, None),
+                ("UP_TO_DATE", "main", 0, 0, None),
+                ("UP_TO_DATE", "main", 0, 0, None),
+            ],
+        ),
+        patch.object(git_service, "get_dirty_files", return_value=[]),
+        patch.object(git_service, "_run_git", return_value=MagicMock(returncode=0, stdout="", stderr="")),
+    ):
+        res = git_service.sync(repo, "myorg")
+        assert res.performed_action == "NO_CHANGE"
+        assert res.after_status == "UP_TO_DATE"
+
+    # 2. status_mid is DIRTY and auto-stash fails (returncode != 0)
+    with (
+        patch.object(
+            git_service,
+            "get_local_status",
+            side_effect=[
+                ("BEHIND", "main", 0, 1, None),
+                ("BEHIND", "main", 0, 1, None),
+                ("DIRTY", "main", 0, 1, None),
+            ],
+        ),
+        patch.object(git_service, "get_dirty_files", return_value=[(" M", "dirty.py")]),
+        patch.object(
+            git_service,
+            "_run_git",
+            side_effect=[
+                MagicMock(returncode=0),  # fetch
+                MagicMock(returncode=1, stdout="", stderr="stash failed: cannot create stash"),  # stash push
+            ],
+        ),
+    ):
+        res_stash_fail = git_service.sync(repo, "myorg", preserve_local_changes=True)
+        assert res_stash_fail.performed_action == "FAILED"
+        assert res_stash_fail.after_status == "DIRTY"

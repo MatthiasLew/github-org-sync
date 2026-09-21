@@ -219,3 +219,53 @@ def test_workspace_lock_release_unlocked(tmp_path: Path) -> None:
 def test_workspace_lock_read_holder_missing(tmp_path: Path) -> None:
     lock = WorkspaceLock(tmp_path, command="test:missing")
     assert lock._read_holder_info() == "Unknown process holding lock"
+
+
+@pytest.mark.unit
+def test_is_process_running_windows() -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_kernel32 = MagicMock()
+    with patch("sys.platform", "win32"), patch("ctypes.windll", create=True) as mock_windll:
+        mock_windll.kernel32 = mock_kernel32
+
+        # 1. Invalid PID <= 0
+        assert is_process_running(0) is False
+        assert is_process_running(-5) is False
+
+        # 2. Running process (handle returned)
+        mock_kernel32.OpenProcess.return_value = 1234
+        assert is_process_running(999) is True
+        mock_kernel32.CloseHandle.assert_called_with(1234)
+
+        # 3. Not running (handle 0)
+        mock_kernel32.OpenProcess.return_value = 0
+        assert is_process_running(999) is False
+
+        # 4. Error during OpenProcess
+        mock_kernel32.OpenProcess.side_effect = OSError("Access denied")
+        assert is_process_running(999) is False
+
+
+@pytest.mark.unit
+def test_get_process_create_time_windows() -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_kernel32 = MagicMock()
+    with patch("sys.platform", "win32"), patch("ctypes.windll", create=True) as mock_windll:
+        mock_windll.kernel32 = mock_kernel32
+
+        # 1. OpenProcess fails
+        mock_kernel32.OpenProcess.return_value = 0
+        assert get_process_create_time(100) is None
+
+        # 2. GetProcessTimes succeeds
+        mock_kernel32.OpenProcess.return_value = 5678
+        mock_kernel32.GetProcessTimes.return_value = 1
+        ctime = get_process_create_time(100)
+        assert ctime is not None
+        mock_kernel32.CloseHandle.assert_called_with(5678)
+
+        # 3. GetProcessTimes fails (returns 0)
+        mock_kernel32.GetProcessTimes.return_value = 0
+        assert get_process_create_time(100) is None
