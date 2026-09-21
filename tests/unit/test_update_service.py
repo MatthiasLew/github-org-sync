@@ -218,8 +218,10 @@ def test_validate_extracted_structure(tmp_path: Path) -> None:
         UpdateService.validate_extracted_structure(tmp_path)
 
     # Direct in root
-    (tmp_path / binary_name).write_text("bin", encoding="utf-8")
-    assert UpdateService.validate_extracted_structure(tmp_path) == tmp_path
+    root_dir = tmp_path / "root_direct"
+    root_dir.mkdir()
+    (root_dir / binary_name).write_text("bin", encoding="utf-8")
+    assert UpdateService.validate_extracted_structure(root_dir) == root_dir
 
 
 @patch("urllib.request.urlopen")
