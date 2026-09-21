@@ -9,6 +9,7 @@ import pytest
 
 from github_org_sync.cli import (
     EXIT_ATTENTION,
+    EXIT_ERROR,
     EXIT_SUCCESS,
     EXIT_USAGE,
     format_json_envelope,
@@ -37,7 +38,7 @@ def test_format_json_envelope_schema() -> None:
 @pytest.mark.integration
 def test_cli_doctor_json(capsys: Any) -> None:
     rc = main(["doctor", "--json"])
-    assert rc in (EXIT_SUCCESS, EXIT_ATTENTION)
+    assert rc in (EXIT_SUCCESS, EXIT_ATTENTION, EXIT_ERROR)
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)

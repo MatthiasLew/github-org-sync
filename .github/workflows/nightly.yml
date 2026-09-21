@@ -32,7 +32,16 @@ jobs:
       - name: Run Slow Tests
         shell: bash
         run: |
-          xvfb-run pytest -m slow || if [ $? -eq 5 ]; then echo "No tests with marker 'slow' found. Skipping."; else exit 1; fi
+          set +e
+          xvfb-run pytest -m slow
+          status=$?
+          set -e
+          if [ $status -eq 5 ]; then
+            echo "No tests with marker 'slow' found (pytest exit code 5). Skipping."
+          elif [ $status -ne 0 ]; then
+            echo "Slow tests failed with exit code $status"
+            exit $status
+          fi
 
   docker-matrix:
     name: Docker Matrix (${{ matrix.base-image }})

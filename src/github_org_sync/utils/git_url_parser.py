@@ -90,14 +90,15 @@ def parse_git_url(url: str) -> ParsedGitUrl | None:
             return ParsedGitUrl(host=host, owner=owner, repo=repo, original_url=raw_url)
 
     # 3. SCP-like SSH: [git@][host]:[owner]/[repo]
-    scp_match = re.match(r"^(?:[^@]+@)?([^/:]+):(.+)$", cleaned_url)
-    if scp_match:
-        host = scp_match.group(1).lower()
-        path = scp_match.group(2).strip("/")
-        parts = path.split("/")
-        if len(parts) >= 2:
-            owner = "/".join(parts[:-1])
-            repo = parts[-1]
-            return ParsedGitUrl(host=host, owner=owner, repo=repo, original_url=raw_url)
+    if "://" not in cleaned_url:
+        scp_match = re.match(r"^(?:[^@]+@)?([^/:]+):(.+)$", cleaned_url)
+        if scp_match:
+            host = scp_match.group(1).lower()
+            path = scp_match.group(2).strip("/")
+            parts = path.split("/")
+            if len(parts) >= 2:
+                owner = "/".join(parts[:-1])
+                repo = parts[-1]
+                return ParsedGitUrl(host=host, owner=owner, repo=repo, original_url=raw_url)
 
     return None

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import inspect
 import json
 import logging
 import shutil
@@ -225,7 +226,10 @@ class UpdateService:
                         f"Symlinks and hardlinks are prohibited in update archive: '{name}' -> '{member.linkname}'"
                     )
 
-                tf.extract(member, dest_dir, filter="data" if hasattr(tarfile, "data_filter") else None)
+                if "filter" in inspect.signature(tf.extract).parameters:
+                    tf.extract(member, dest_dir, filter="data")
+                else:
+                    tf.extract(member, dest_dir)
 
     @classmethod
     def safe_extract_archive(cls, archive_path: Path, dest_dir: Path) -> None:
